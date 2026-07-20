@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "jsx": "react-jsx", "allowJs": true, "types": ["node", "vite/client"] },
+  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.mjs"],
+  "exclude": ["node_modules", "dist", "out", "coverage"]
+}

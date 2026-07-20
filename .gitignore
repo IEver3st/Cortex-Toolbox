@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+out/
+build/
+.vite/
+.webpack/
+
+# Test and coverage
+coverage/
+test-results/
+playwright-report/
+*.test-results/
+.nyc_output/
+
+# Runtime / local env (never commit secrets or local overrides)
+.env.local
+.env.development
+.env.production
+.env.*.local
+!.env.example
+
+# IDE and tool state
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.cursor/hooks/state/
+
+# App runtime data
+apps/desktop/.impeccable/live/
+*.log
+logs/
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Generated assets / screenshots
+artifacts/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Package manager
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+yarn-error.log*
+
+# Misc
+.cache/
+.eslintcache
+.prettiercache
+*.tsbuildinfo

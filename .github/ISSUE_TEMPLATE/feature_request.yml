@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose an offline, deterministic creator workflow
+title: '[Feature]: '
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      {
+        label: Creator problem,
+        description: Describe the workflow rather than a competing product.,
+      }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Proposed deterministic workflow }
+    validations: { required: true }
+  - type: textarea
+    attributes:
+      {
+        label: File safety and format evidence,
+        description: Link documented schemas or permissively licensed references when applicable.,
+      }
+  - type: checkboxes
+    attributes:
+      label: Scope
+      options:
+        - label: This request does not require generative AI, access-control bypasses, or proprietary assets.
+          required: true

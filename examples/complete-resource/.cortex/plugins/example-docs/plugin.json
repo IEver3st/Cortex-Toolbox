@@ -1,0 +1,18 @@
+{
+  "id": "org.cortex.example-docs",
+  "name": "Example Documentation Extractor",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "license": "GPL-3.0-or-later",
+  "entry": "index.js",
+  "permissions": ["workspace:read"],
+  "contributes": {
+    "modelLoaders": [],
+    "textureConverters": [],
+    "metadataSchemas": [],
+    "packageProfiles": [],
+    "auditRules": [],
+    "documentationExtractors": ["fivem-events"],
+    "exportTargets": []
+  }
+}

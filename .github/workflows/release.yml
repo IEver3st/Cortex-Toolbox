@@ -1,0 +1,87 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test && pnpm typecheck && pnpm lint
+      - name: Detect release channel from tag
+        id: channel
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" == *"-beta"* ]] || [[ "$TAG" == *"beta"* ]]; then
+            echo "name=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=stable" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build icons
+        run: pnpm icons
+      - name: Package installers
+        env:
+          CORTEX_RELEASE_CHANNEL: ${{ steps.channel.outputs.name }}
+        run: |
+          if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then
+            pnpm make:beta
+          else
+            pnpm make
+          fi
+        shell: bash
+      - uses: anchore/sbom-action@v0
+        with:
+          path: apps/desktop/out/make
+          format: cyclonedx-json
+          output-file: apps/desktop/out/make/cortex-${{ runner.os }}.cdx.json
+      - name: Generate checksums (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Get-ChildItem apps/desktop/out/make -File -Recurse | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Replace((Resolve-Path .).Path + '\', ''))" } | Set-Content apps/desktop/out/make/SHA256SUMS-Windows.txt
+      - name: Generate checksums (Unix)
+        if: runner.os != 'Windows'
+        run: find apps/desktop/out/make -type f -print0 | sort -z | xargs -0 sha256sum > apps/desktop/out/make/SHA256SUMS-${{ runner.os }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.channel.outputs.name }}-${{ runner.os }}
+          path: apps/desktop/out/make/**/*
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: release-artifacts, merge-multiple: true }
+      - name: Detect prerelease
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *"-beta"* ]] || [[ "${GITHUB_REF_NAME}" == *"beta"* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**/*
+          generate_release_notes: true
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          body: |
+            Release channel: `${{ steps.meta.outputs.channel }}`.
+            Platform signing is applied only when repository signing credentials are configured.
+            Artifacts without a platform signature are clearly considered unsigned development builds.

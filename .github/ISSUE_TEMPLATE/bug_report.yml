@@ -1,0 +1,28 @@
+name: Bug report
+description: Report a reproducible Cortex problem
+title: '[Bug]: '
+labels: [bug]
+body:
+  - type: checkboxes
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed private assets, credentials, and personal paths from this report.
+          required: true
+        - label: This is not a vulnerability report (security issues use the private advisory form).
+          required: true
+  - type: input
+    attributes: { label: Cortex version, placeholder: 0.1.0 }
+    validations: { required: true }
+  - type: dropdown
+    attributes: { label: Operating system, options: [Windows, macOS, Linux] }
+    validations: { required: true }
+  - type: textarea
+    attributes:
+      { label: Reproduction, description: List exact steps and whether any files changed. }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Expected and actual result }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Redacted diagnostics }
