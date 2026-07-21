@@ -171,16 +171,16 @@ The app keeps a recent-workspaces list, remembers last-opened paths, and reopens
 
 Settings are stored locally with `electron-store` and normalized on read so older preference files are migrated forward. The settings surface is organized into:
 
-- **General** — interface scale, pointer cursor, and UI density.
-- **Appearance** — light/dark/system mode, theme preset, palette selection, and custom palettes.
-- **Editor** — editor font size, code font, ligatures, and contrast protections.
-- **Modules** — enable or disable individual workbench modules.
-- **Sidebar** — navigation density, category labels, and custom module ordering.
-- **Accessibility** — reduced motion and text contrast safeguards.
-- **External tools** — path to the optional YTD extraction tool.
-- **Privacy and data** — explains local-only operation and how diagnostics are handled.
-- **Report a Problem** — submit a GitHub issue with attached diagnostic events.
-- **About** — version, license, release branch, and auto-update controls.
+- **General** : interface scale, pointer cursor, and UI density.
+- **Appearance** : light/dark/system mode, theme preset, palette selection, and custom palettes.
+- **Editor** : editor font size, code font, ligatures, and contrast protections.
+- **Modules** : enable or disable individual workbench modules.
+- **Sidebar** : navigation density, category labels, and custom module ordering.
+- **Accessibility** : reduced motion and text contrast safeguards.
+- **External tools** : path to the optional YTD extraction tool.
+- **Privacy and data** : explains local-only operation and how diagnostics are handled.
+- **Report a Problem** : submit a GitHub issue with attached diagnostic events.
+- **About** : version, license, release branch, and auto-update controls.
 
 Themes and color tokens are centralized in `apps/desktop/src/renderer/styles.css` and applied through CSS custom properties.
 
@@ -191,8 +191,8 @@ Themes and color tokens are centralized in `apps/desktop/src/renderer/styles.css
 Cortex supports three release channels:
 
 - `stable`
-- `beta` — separate app bundle ID, icon, and installer name
-- `development` — local builds; updates are disabled
+- `beta` : separate app bundle ID, icon, and installer name
+- `development` : local builds; updates are disabled
 
 When configured with a GitHub owner and repository and enabled via `CORTEX_ENABLE_AUTO_UPDATE`, the app can check for new releases, download installers in the background, and notify you when an update is ready to install. Auto-update controls live in Settings > About. The Activity Rail shows a download icon when an update is ready.
 
