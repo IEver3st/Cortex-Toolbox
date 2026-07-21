@@ -35,7 +35,30 @@ playwright-report/
 *.njsproj
 *.sln
 *.sw?
-.cursor/hooks/state/
+# AI / assistant tooling state and config
+.cursor/
+.windsurf/
+.devin/
+.claude/
+.anthropic/
+.copilot/
+.ai/
+.aider*
+*.cursorrules
+*.cursorignore
+*.windsurfrules
+*.windsurfignore
+copilot-instructions.md
+.github/copilot-instructions.md
+agents.md
+AGENTS.md
+claude.md
+CLAUDE.md
+cursor-rules.md
+.cursorrules.md
+*.ai.md
+*.prompt.md
+.prompts/
 
 # App runtime data
 apps/desktop/.impeccable/live/
