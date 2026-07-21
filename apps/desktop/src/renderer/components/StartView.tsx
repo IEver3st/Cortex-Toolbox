@@ -15,10 +15,17 @@ import {
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, m } from 'motion/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { listActivities, type ActivityEntry, type ActivityTool } from '../lib/activity-history';
 import { copyText } from '../lib/clipboard';
+import {
+  collapsiblePanelMotion,
+  panelRevealMotion,
+  useReducedMotion,
+  type FolderNavDirection,
+} from '../lib/motion';
 import { formatRelativeTime } from '../lib/relative-time';
 import { formatBytes, unwrap } from '../lib/result';
 import { MODULE_ICONS } from '../modules/registry';
@@ -31,6 +38,7 @@ import {
 } from '../store/workspace';
 import { ContextMenu } from './ContextMenu';
 import { HomeModuleHub } from './HomeModuleHub';
+import { SectionPageHost } from './SectionPageHost';
 
 type NextTone = 'neutral' | 'attention' | 'ready' | 'blocked';
 
@@ -721,7 +729,10 @@ function BriefSkeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
-export function StartView(): React.JSX.Element {
+function WorkspaceBriefPanel(): React.JSX.Element | null {
+  const reduced = useReducedMotion();
+  const detailsMotion = collapsiblePanelMotion(reduced);
+  const scopeMotion = panelRevealMotion(reduced);
   const queryClient = useQueryClient();
   const workspace = useWorkspaceStore((state) => state.workspace);
   const files = useWorkspaceStore((state) => state.files);
@@ -842,9 +853,7 @@ export function StartView(): React.JSX.Element {
       .slice(0, 3);
   }, [workspace?.root]);
 
-  if (!workspace) {
-    return <HomeModuleHub />;
-  }
+  if (!workspace) return null;
 
   const name = workspace.project?.name ?? workspace.root.split(/[\\/]/).at(-1) ?? 'Workspace';
   const detection = summary.data?.detection;
@@ -1141,40 +1150,44 @@ export function StartView(): React.JSX.Element {
         </section>
 
         {scopeBlocked && detection ? (
-          <section
-            className={`brief-scope${scopeFocus ? ' is-focused' : ''}`}
-            aria-labelledby="brief-scope-title"
-          >
-            <div className="brief-scope-copy">
-              <h2 id="brief-scope-title">Resolve workspace scope</h2>
-              <p>{detection.message}</p>
-            </div>
-            <ul className="brief-scope-list">
-              {detection.candidates.map((candidate) => (
-                <li key={candidate.relativePath}>
-                  <div className="brief-scope-item-copy">
-                    <strong>{candidate.label}</strong>
-                    <code title={candidate.relativePath}>{candidate.relativePath}</code>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void openResourceRoot(candidate.directory)}
-                  >
-                    Choose resource
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="brief-scope-actions">
-              <button type="button" className="secondary" onClick={() => void openFolder()}>
-                Browse for another folder
-              </button>
-              <button type="button" className="brief-text-action" onClick={handleForceScope}>
-                Use this folder anyway
-              </button>
-            </div>
-          </section>
+          <AnimatePresence mode="wait" initial={false}>
+            <m.section
+              key="brief-scope"
+              className={`brief-scope${scopeFocus ? ' is-focused' : ''}`}
+              aria-labelledby="brief-scope-title"
+              {...scopeMotion}
+            >
+              <div className="brief-scope-copy">
+                <h2 id="brief-scope-title">Resolve workspace scope</h2>
+                <p>{detection.message}</p>
+              </div>
+              <ul className="brief-scope-list">
+                {detection.candidates.map((candidate) => (
+                  <li key={candidate.relativePath}>
+                    <div className="brief-scope-item-copy">
+                      <strong>{candidate.label}</strong>
+                      <code title={candidate.relativePath}>{candidate.relativePath}</code>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void openResourceRoot(candidate.directory)}
+                    >
+                      Choose resource
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="brief-scope-actions">
+                <button type="button" className="secondary" onClick={() => void openFolder()}>
+                  Browse for another folder
+                </button>
+                <button type="button" className="brief-text-action" onClick={handleForceScope}>
+                  Use this folder anyway
+                </button>
+              </div>
+            </m.section>
+          </AnimatePresence>
         ) : null}
 
         {summary.isError ? (
@@ -1477,36 +1490,38 @@ export function StartView(): React.JSX.Element {
                       className={detailsOpen ? 'is-open' : undefined}
                     />
                   </button>
-                  {detailsOpen ? (
-                    <div className="brief-details">
-                      {topFolders.length > 0 ? (
-                        <div>
-                          <h3>Top folders</h3>
-                          <ul className="brief-rank-list">
-                            {topFolders.map((folder) => (
-                              <li key={folder.name}>
-                                <code title={folder.name}>{folder.name}</code>
-                                <span>{folder.count}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      {(summary.data?.extensions.length ?? 0) > 0 ? (
-                        <div>
-                          <h3>Extensions</h3>
-                          <ul className="brief-rank-list">
-                            {summary.data?.extensions.map((entry) => (
-                              <li key={entry.ext}>
-                                <code title={entry.ext}>{entry.ext}</code>
-                                <span>{entry.count}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+                  <AnimatePresence initial={false} mode="wait">
+                    {detailsOpen ? (
+                      <m.div key="brief-details" className="brief-details" {...detailsMotion}>
+                        {topFolders.length > 0 ? (
+                          <div>
+                            <h3>Top folders</h3>
+                            <ul className="brief-rank-list">
+                              {topFolders.map((folder) => (
+                                <li key={folder.name}>
+                                  <code title={folder.name}>{folder.name}</code>
+                                  <span>{folder.count}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {(summary.data?.extensions.length ?? 0) > 0 ? (
+                          <div>
+                            <h3>Extensions</h3>
+                            <ul className="brief-rank-list">
+                              {summary.data?.extensions.map((entry) => (
+                                <li key={entry.ext}>
+                                  <code title={entry.ext}>{entry.ext}</code>
+                                  <span>{entry.count}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </m.div>
+                    ) : null}
+                  </AnimatePresence>
                 </>
               )}
             </section>
@@ -1575,5 +1590,43 @@ export function StartView(): React.JSX.Element {
         </section>
       </div>
     </div>
+  );
+}
+
+function resolveFolderDirection(prev: string | null, root: string | null): FolderNavDirection {
+  if (!prev && root) return 'enter';
+  if (prev && !root) return 'exit';
+  if (!prev || !root) return 'enter';
+
+  const normalizedPrev = prev.replace(/[\\/]+$/, '').toLowerCase();
+  const normalizedRoot = root.replace(/[\\/]+$/, '').toLowerCase();
+  const drillingOut =
+    normalizedPrev.startsWith(`${normalizedRoot}\\`) ||
+    normalizedPrev.startsWith(`${normalizedRoot}/`);
+
+  return drillingOut ? 'back' : 'switch';
+}
+
+export function StartView(): React.JSX.Element {
+  const workspace = useWorkspaceStore((state) => state.workspace);
+  const root = workspace?.root ?? null;
+  const prevRootRef = useRef(root);
+  const directionRef = useRef<FolderNavDirection>('enter');
+
+  const prev = prevRootRef.current;
+  if (prev !== root) {
+    directionRef.current = resolveFolderDirection(prev, root);
+    prevRootRef.current = root;
+  }
+
+  return (
+    <SectionPageHost
+      pageKey={root ?? 'launchpad'}
+      variant="folder"
+      direction={directionRef.current}
+      className="start-view-host"
+    >
+      {workspace ? <WorkspaceBriefPanel /> : <HomeModuleHub />}
+    </SectionPageHost>
   );
 }

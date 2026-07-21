@@ -42,14 +42,14 @@ const manifestTheme = EditorView.theme(
       borderRight: '1px solid var(--cortex-border-soft)',
     },
     '.cm-activeLine': {
-      backgroundColor: 'rgb(167 192 128 / 6%)',
+      backgroundColor: 'rgb(201 169 98 / 6%)',
     },
     '.cm-activeLineGutter': {
       color: 'var(--cortex-accent)',
-      backgroundColor: 'rgb(167 192 128 / 8%)',
+      backgroundColor: 'rgb(201 169 98 / 8%)',
     },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-      backgroundColor: 'rgb(167 192 128 / 18%) !important',
+      backgroundColor: 'rgb(201 169 98 / 18%) !important',
     },
     '.cm-cursor': {
       borderLeftColor: 'var(--cortex-accent)',

@@ -18,6 +18,7 @@ playwright-report/
 
 # Runtime / local env (never commit secrets or local overrides)
 .env.local
+.env
 .env.development
 .env.production
 .env.*.local

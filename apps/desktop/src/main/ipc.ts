@@ -5,7 +5,6 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
-  nativeTheme,
   shell,
   type IpcMainInvokeEvent,
   type OpenDialogOptions,
@@ -144,28 +143,6 @@ export function readPreferences(): Preferences {
       // If the store itself is unwritable, still return in-memory defaults.
     }
     return { ...DEFAULT_PREFERENCES };
-  }
-}
-
-export function applyWindowBackgroundMaterial(
-  window: BrowserWindow,
-  preferences: Preferences,
-): void {
-  if (process.platform !== 'win32' || window.isDestroyed()) return;
-  const mode =
-    preferences.colorMode === 'system'
-      ? nativeTheme.shouldUseDarkColors
-        ? 'dark'
-        : 'light'
-      : preferences.colorMode;
-  const enabled =
-    mode === 'light'
-      ? preferences.wallpaperBlendLight.enabled
-      : preferences.wallpaperBlendDark.enabled;
-  try {
-    window.setBackgroundMaterial(enabled ? 'acrylic' : 'none');
-  } catch {
-    // Older Windows builds do not expose system-drawn background materials.
   }
 }
 
@@ -860,8 +837,6 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
       const value = normalizePreferences(request);
       settings.set('preferences', value);
       applyReleaseBranchBranding(value);
-      const window = BrowserWindow.fromWebContents(event.sender);
-      if (window) applyWindowBackgroundMaterial(window, value);
       return ok(value);
     } catch (error: unknown) {
       return fail(fromUnknown(error, 'SETTINGS_WRITE_FAILED'));

@@ -79,7 +79,7 @@
 
 .theme-studio-header-actions button:disabled {
   opacity: 0.45;
-  cursor: not-allowed;
+  cursor: var(--cortex-cursor-not-allowed);
 }
 
 .theme-studio-layout {
@@ -103,35 +103,6 @@
 
 .theme-studio-section:first-child {
   padding-top: 0;
-}
-
-.theme-section-header-with-action {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.theme-section-reset {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 7px;
-  border: 0;
-  background: transparent;
-  color: var(--cortex-text-muted);
-  font-size: 0.6875rem;
-  font-weight: 600;
-}
-
-.theme-section-reset svg {
-  width: 13px;
-  height: 13px;
-}
-
-.theme-section-reset:disabled {
-  opacity: 0.38;
 }
 
 .theme-section-header h2,
@@ -278,6 +249,7 @@
   padding: 2px 0 6px;
   overflow-x: auto;
   scrollbar-width: thin;
+  scrollbar-color: var(--cortex-scrollbar-thumb) transparent;
 }
 
 .theme-palette-strip > button {
@@ -509,13 +481,6 @@
     0 0 0 4px var(--cortex-accent);
 }
 
-.theme-wallpaper-controls {
-  margin-top: 10px;
-  padding: 14px 14px 8px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--cortex-surface-1) 74%, transparent);
-}
-
 .theme-studio-aside {
   position: sticky;
   top: 12px;
@@ -586,19 +551,6 @@
   background: var(--preview-canvas);
 }
 
-.theme-studio-preview-stage.has-wallpaper {
-  background: linear-gradient(
-    125deg,
-    color-mix(in srgb, #1f5c65 72%, var(--preview-canvas)) 0 32%,
-    color-mix(in srgb, #84634b 66%, var(--preview-canvas)) 32% 63%,
-    color-mix(in srgb, #344c68 70%, var(--preview-canvas)) 63% 100%
-  );
-}
-
-.theme-studio-preview-stage.has-wallpaper .theme-preview-workspace {
-  background: transparent;
-}
-
 .theme-preview-workspace {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
@@ -616,33 +568,6 @@
   padding: 8px 6px;
   background: var(--preview-rail);
   border-right: 1px solid var(--preview-outline);
-}
-
-.has-wallpaper .theme-preview-rail {
-  background-color: color-mix(
-    in srgb,
-    color-mix(
-        in srgb,
-        var(--preview-rail) calc(100% - var(--preview-wallpaper-tint)),
-        var(--preview-signal) var(--preview-wallpaper-tint)
-      )
-      var(--preview-wallpaper-opacity),
-    transparent
-  );
-  backdrop-filter: blur(var(--preview-wallpaper-blur)) saturate(var(--preview-wallpaper-saturation));
-}
-
-.has-wallpaper.has-noise .theme-preview-rail {
-  background-image: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--preview-ink) 13%, transparent) 0.5px,
-    transparent 0.6px
-  );
-  background-size: 3px 3px;
-}
-
-.theme-preview-main {
-  background: var(--preview-canvas);
 }
 
 .theme-preview-rail-item {

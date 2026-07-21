@@ -95,7 +95,7 @@ export function JobsPanel(): React.JSX.Element {
                 initial={reduced ? false : overlayFade.initial}
                 animate={overlayFade.animate}
                 exit={reduced ? overlayFade.animate : overlayFade.exit}
-                transition={transition(motionDurations.panel, reduced)}
+                transition={transition(motionDurations.fast, reduced)}
               />
             </Dialog.Overlay>
             <Dialog.Content
@@ -107,7 +107,7 @@ export function JobsPanel(): React.JSX.Element {
                 initial={reduced ? false : drawerSlide.initial}
                 animate={drawerSlide.animate}
                 exit={reduced ? drawerSlide.animate : drawerSlide.exit}
-                transition={transition(motionDurations.panel, reduced)}
+                transition={transition(motionDurations.fast, reduced)}
               >
                 <header className="activity-header">
                   <div className="activity-header-copy">
@@ -188,13 +188,10 @@ export function JobsPanel(): React.JSX.Element {
                           <m.article
                             className={`job activity-job status-${job.status}`}
                             key={job.id}
-                            initial={reduced ? false : { opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={reduced ? { opacity: 1, y: 0 } : { opacity: 0, y: -4 }}
-                            transition={{
-                              ...transition(motionDurations.fast, reduced),
-                              delay: reduced ? 0 : Math.min(index * 0.03, 0.12),
-                            }}
+                            initial={reduced ? false : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={reduced ? { opacity: 1 } : { opacity: 0 }}
+                            transition={transition(motionDurations.direct, reduced)}
                           >
                             <div className={`job-icon ${job.status}`} aria-hidden="true">
                               <JobStatusIcon status={job.status} />
@@ -221,7 +218,7 @@ export function JobsPanel(): React.JSX.Element {
                                 >
                                   <span
                                     className="activity-progress-fill"
-                                    style={{ width: `${progressPct}%` }}
+                                    style={{ transform: `scaleX(${job.progress ?? 0})` }}
                                   />
                                 </div>
                               ) : null}

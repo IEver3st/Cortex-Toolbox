@@ -53,9 +53,9 @@ export function StateCrossfade({
     <m.div
       key={stateKey}
       className="state-crossfade"
-      initial={reduced ? false : { opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={transition(motionDurations.panel, reduced)}
+      initial={reduced ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={transition(motionDurations.fast, reduced)}
     >
       {children}
     </m.div>

@@ -15,11 +15,10 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ActionButton } from '../../components/ActionButton';
 import { CodeEditor } from '../../components/CodeEditor';
 import { EmptyState, Toggle } from '../../components/UiPrimitives';
-import { unwrap } from '../../lib/result';
 import { recordActivity } from '../../lib/activity-history';
+import { unwrap } from '../../lib/result';
 import { PROBE_WIRE_FOCUS_KEY, type ProbeWireFocus } from '../../lib/probe-history';
 import { useWorkspaceStore } from '../../store/workspace';
 
@@ -652,13 +651,13 @@ function WireEditorPane({
           </span>
         </div>
         <div className="header-actions">
-          <ActionButton type="button" disabled={!dirty} onClick={onReview}>
+          <button type="button" disabled={!dirty} onClick={onReview}>
             Review changes
-          </ActionButton>
+          </button>
           {planId ? (
-            <ActionButton type="button" variant="primary" onClick={onApply}>
+            <button type="button" className="primary" onClick={onApply}>
               Apply safely
-            </ActionButton>
+            </button>
           ) : null}
         </div>
       </div>
@@ -678,6 +677,7 @@ export default function Wire(): React.JSX.Element {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ViewMode>('map');
+
   const [query, setQuery] = useState('');
   const [hideUnconnected, setHideUnconnected] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -686,12 +686,31 @@ export default function Wire(): React.JSX.Element {
   const [editSession, setEditSession] = useState<EditSession | null>(null);
   const [writePlanId, setWritePlanId] = useState<string | null>(null);
   const [viewReset, setViewReset] = useState(0);
+  const paneHostRef = useRef<HTMLDivElement>(null);
+  const [, setLayoutEpoch] = useState(0);
 
   const analysis = useQuery({
     queryKey: ['wire-analysis', workspace?.root],
     queryFn: async () => unwrap(await window.cortex.resources.analyze()),
     enabled: Boolean(workspace),
   });
+
+  useLayoutEffect(() => {
+    const node = paneHostRef.current;
+    if (!node) return;
+
+    let lastHeight = 0;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height ?? 0;
+      if (height > 0 && Math.abs(height - lastHeight) > 1) {
+        lastHeight = height;
+        setLayoutEpoch((value) => value + 1);
+      }
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [analysis.data, activeView]);
 
   useEffect(() => {
     setSelectedFile(null);
@@ -914,7 +933,7 @@ export default function Wire(): React.JSX.Element {
   const editDirty = editSession ? editSession.editedSlice !== editSession.sliceSource : false;
 
   return (
-    <div className="workbench-page module-page wire-view">
+    <div className="module-page wire-view">
       {analysis.isFetching && !analysis.data ? (
         <div className="wire-loading" aria-live="polite">
           Building code map…
@@ -997,38 +1016,51 @@ export default function Wire(): React.JSX.Element {
               })}
             </div>
 
-            {activeView === 'map' ? (
-              <WireGraphCanvas
-                analysis={analysis.data}
-                nodes={graphNodes}
-                edges={filteredEdges}
-                selectedNode={selectedNode}
-                zoom={zoom}
-                viewReset={viewReset}
-                onSelect={selectGraphNode}
-                onEdit={(node) => void openEditor(node)}
-                onMoveNode={persistPosition}
-                onZoomChange={setZoom}
-              />
-            ) : editSession ? (
-              <WireEditorPane
-                session={editSession}
-                planId={writePlanId}
-                dirty={editDirty}
-                onChange={(value) => {
-                  setEditSession((current) =>
-                    current ? { ...current, editedSlice: value } : current,
-                  );
-                  setWritePlanId(null);
-                }}
-                onReview={() => void reviewEdit()}
-                onApply={() => void applyEdit()}
-              />
-            ) : (
-              <div className="wire-editor-empty">
-                Select a node and use the edit action to open a scoped source editor.
+            <div className="wire-view-stage">
+              <div className="wire-pane-host" ref={paneHostRef}>
+                <div
+                  className={`wire-view-pane${activeView === 'map' ? ' is-active' : ''}`}
+                  aria-hidden={activeView !== 'map'}
+                >
+                  <WireGraphCanvas
+                    analysis={analysis.data}
+                    nodes={graphNodes}
+                    edges={filteredEdges}
+                    selectedNode={selectedNode}
+                    zoom={zoom}
+                    viewReset={viewReset}
+                    onSelect={selectGraphNode}
+                    onEdit={(node) => void openEditor(node)}
+                    onMoveNode={persistPosition}
+                    onZoomChange={setZoom}
+                  />
+                </div>
+                <div
+                  className={`wire-view-pane${activeView === 'editor' ? ' is-active' : ''}`}
+                  aria-hidden={activeView !== 'editor'}
+                >
+                  {editSession ? (
+                    <WireEditorPane
+                      session={editSession}
+                      planId={writePlanId}
+                      dirty={editDirty}
+                      onChange={(value) => {
+                        setEditSession((current) =>
+                          current ? { ...current, editedSlice: value } : current,
+                        );
+                        setWritePlanId(null);
+                      }}
+                      onReview={() => void reviewEdit()}
+                      onApply={() => void applyEdit()}
+                    />
+                  ) : (
+                    <div className="wire-editor-empty">
+                      Select a node and use the edit action to open a scoped source editor.
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
 
             <footer className="wire-legend">
               <span>

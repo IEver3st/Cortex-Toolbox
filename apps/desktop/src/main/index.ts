@@ -1,10 +1,10 @@
 import path from 'node:path';
-import { app, BrowserWindow, nativeImage, nativeTheme, session } from 'electron';
+import { app, BrowserWindow, nativeImage, session } from 'electron';
 import pino from 'pino';
 import { brandingForChannel, iconBaseNameForReleaseBranch } from '../shared/branding';
 import { loadEnv } from './config/env';
 import { DiagnosticsService } from './diagnostics-service';
-import { applyWindowBackgroundMaterial, registerIpc, readPreferences } from './ipc';
+import { registerIpc, readPreferences } from './ipc';
 import { resolveAppIconPath } from './window-branding';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -59,10 +59,6 @@ function createWindow(): BrowserWindow {
       devTools: isDevelopment || env.CORTEX_ENABLE_DEVTOOLS,
     },
   });
-  applyWindowBackgroundMaterial(window, preferences);
-  const refreshBackgroundMaterial = () => applyWindowBackgroundMaterial(window, readPreferences());
-  nativeTheme.on('updated', refreshBackgroundMaterial);
-  window.once('closed', () => nativeTheme.removeListener('updated', refreshBackgroundMaterial));
   window.once('ready-to-show', () => window.show());
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, target) => {

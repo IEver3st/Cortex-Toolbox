@@ -18,7 +18,9 @@ async function main(): Promise<void> {
 
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.getByRole('heading', { name: 'Cortex ToolBox' }).waitFor();
+    await page
+      .getByRole('heading', { name: /^(Start with a workspace|Open your first workspace)$/ })
+      .waitFor();
     await page.screenshot({ path: path.join(output, 'first-launch-1440x900.png') });
 
     await page.setViewportSize({ width: 1280, height: 720 });

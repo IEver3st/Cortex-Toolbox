@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import type { Preferences } from '../../../shared/contracts';
 import {
   ADVANCED_TOKEN_KEYS,
-  DEFAULT_WALLPAPER_BLEND,
   FOUNDATION_TOKEN_KEYS,
   isBuiltinPaletteId,
   normalizeHexColor,
@@ -13,7 +12,6 @@ import {
   type FoundationTokenKey,
   type StoredPalette,
   type TokenOverrides,
-  type WallpaperBlendSettings,
 } from '../../../shared/theme-schema';
 import { BUILTIN_PALETTE_META } from '../../lib/theme/builtins';
 import { CODE_FONTS, detectAvailableFonts, INTERFACE_FONTS } from '../../lib/theme/fonts';
@@ -181,16 +179,6 @@ export function ThemeStudio({
     history.push(next);
   };
 
-  const wallpaperKey =
-    previewModeResolved === 'light' ? 'wallpaperBlendLight' : 'wallpaperBlendDark';
-
-  const updateWallpaper = (patch: Partial<WallpaperBlendSettings>) => {
-    history.push({
-      ...draft,
-      [wallpaperKey]: { ...draft[wallpaperKey], ...patch },
-    });
-  };
-
   const scrollToSection = (sectionId: string) => {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -309,7 +297,7 @@ export function ThemeStudio({
       <header className="theme-studio-header">
         <div>
           <h1>Appearance</h1>
-          <p>Shape the color, typography, and material of Cortex.</p>
+          <p>Shape the color and typography of Cortex.</p>
         </div>
         <div className="theme-studio-header-actions">
           {hasUnsavedPaletteEdits ? (
@@ -531,91 +519,6 @@ export function ThemeStudio({
                 />
               </div>
             </div>
-          </section>
-
-          <section className="theme-studio-section" id="materials">
-            <header className="theme-section-header theme-section-header-with-action">
-              <div>
-                <h2>Materials</h2>
-                <p>Blend the navigation rail with the desktop wallpaper.</p>
-              </div>
-              <button
-                type="button"
-                className="theme-section-reset"
-                disabled={
-                  JSON.stringify(draft[wallpaperKey]) === JSON.stringify(DEFAULT_WALLPAPER_BLEND)
-                }
-                onClick={() =>
-                  history.push({ ...draft, [wallpaperKey]: { ...DEFAULT_WALLPAPER_BLEND } })
-                }
-              >
-                <RotateCcw aria-hidden="true" /> Reset material
-              </button>
-            </header>
-            <div className="theme-studio-row">
-              <div>
-                <span className="theme-section-label">Wallpaper blend ({previewModeResolved})</span>
-                <p className="theme-row-help">
-                  Diffuses colors from the desktop behind the navigation rail.
-                </p>
-              </div>
-              <Toggle
-                id="wallpaper-blend"
-                name="wallpaperBlend"
-                checked={draft[wallpaperKey].enabled}
-                onChange={(checked) => updateWallpaper({ enabled: checked })}
-              />
-            </div>
-            {draft[wallpaperKey].enabled ? (
-              <div className="theme-studio-stack theme-wallpaper-controls">
-                {(
-                  [
-                    ['blurStrength', 'Blur strength'],
-                    ['wallpaperInfluence', 'Wallpaper influence'],
-                    ['tintStrength', 'Tint strength'],
-                    ['saturation', 'Saturation'],
-                    ['sidebarOpacity', 'Sidebar opacity'],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key} className="theme-slider-row">
-                    <span>{label}</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={draft[wallpaperKey][key]}
-                      onChange={(event) =>
-                        updateWallpaper({
-                          [key]: Number(event.target.value),
-                        })
-                      }
-                    />
-                    <output>
-                      {draft[wallpaperKey][key]}
-                      {key === 'blurStrength' ? 'px' : '%'}
-                    </output>
-                  </label>
-                ))}
-                <div className="theme-studio-row">
-                  <span className="theme-section-label">Subtle noise texture</span>
-                  <Toggle
-                    id="wallpaper-noise"
-                    name="wallpaperNoise"
-                    checked={draft[wallpaperKey].noiseTexture}
-                    onChange={(checked) => updateWallpaper({ noiseTexture: checked })}
-                  />
-                </div>
-                <div className="theme-studio-row">
-                  <span className="theme-section-label">Reduce effect while inactive</span>
-                  <Toggle
-                    id="wallpaper-inactive"
-                    name="wallpaperInactive"
-                    checked={draft[wallpaperKey].reduceWhenInactive}
-                    onChange={(checked) => updateWallpaper({ reduceWhenInactive: checked })}
-                  />
-                </div>
-              </div>
-            ) : null}
           </section>
 
           <section className="theme-studio-section" id="readability">

@@ -112,13 +112,6 @@ export function diffPreferences(before: Preferences, after: Preferences): ThemeC
     'typography',
   );
   push('codeFont', 'Code typeface', before.codeFont, after.codeFont, 'typography');
-  push(
-    'wallpaperBlend',
-    'Rail',
-    before.wallpaperBlendDark.enabled ? 'Wallpaper blend' : 'Static',
-    after.wallpaperBlendDark.enabled ? 'Wallpaper blend' : 'Static',
-    'materials',
-  );
 
   const mode = after.colorMode === 'dark' ? 'dark' : 'light';
   const tokenMode = mode === 'dark' ? 'dark' : 'light';

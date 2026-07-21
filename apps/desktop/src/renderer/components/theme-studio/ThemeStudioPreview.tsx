@@ -1,7 +1,6 @@
 import type { Preferences } from '../../../shared/contracts';
 import type { FullThemeTokens } from '../../../shared/theme-schema';
 import { resolveCodeFont } from '../../lib/theme/fonts';
-import { resolvedColorMode } from '../../lib/theme/resolve';
 import { Toggle } from '../UiPrimitives';
 
 type PreviewMode = 'workspace' | 'editor' | 'dialog';
@@ -22,12 +21,6 @@ export function ThemeStudioPreview({
   onToggleExpand: () => void;
 }): React.JSX.Element {
   const codeFont = resolveCodeFont(preferences.codeFont).family;
-  const resolvedMode = resolvedColorMode(preferences.colorMode);
-  const wallpaper =
-    resolvedMode === 'light' ? preferences.wallpaperBlendLight : preferences.wallpaperBlendDark;
-  const effectiveOpacity = Math.round(
-    100 - (wallpaper.wallpaperInfluence * (100 - wallpaper.sidebarOpacity)) / 100,
-  );
   const previewStyle = {
     '--preview-signal': tokens.signal,
     '--preview-canvas': tokens.canvas,
@@ -46,11 +39,6 @@ export function ThemeStudioPreview({
     '--preview-selection': tokens.syntaxSelection,
     '--preview-code-font': codeFont,
     '--preview-code-size': `${preferences.editorFontSize}px`,
-    '--preview-wallpaper-blur': `${Math.round(wallpaper.blurStrength / 5)}px`,
-    '--preview-wallpaper-influence': `${wallpaper.wallpaperInfluence}%`,
-    '--preview-wallpaper-tint': `${wallpaper.tintStrength}%`,
-    '--preview-wallpaper-saturation': `${wallpaper.saturation}%`,
-    '--preview-wallpaper-opacity': `${effectiveOpacity}%`,
   } as React.CSSProperties;
 
   return (
@@ -75,10 +63,7 @@ export function ThemeStudioPreview({
         </button>
       </div>
 
-      <div
-        className={`theme-studio-preview-stage${wallpaper.enabled ? ' has-wallpaper' : ''}${wallpaper.noiseTexture ? ' has-noise' : ''}`}
-        style={previewStyle}
-      >
+      <div className="theme-studio-preview-stage" style={previewStyle}>
         {mode === 'workspace' ? <WorkspacePreview /> : null}
         {mode === 'editor' ? <EditorPreview ligatures={preferences.codeLigatures} /> : null}
         {mode === 'dialog' ? <DialogPreview /> : null}

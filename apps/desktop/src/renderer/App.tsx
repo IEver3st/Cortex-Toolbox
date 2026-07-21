@@ -1,4 +1,3 @@
-import { AnimatePresence, m } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -16,13 +15,13 @@ import { MODULE_BY_ID } from '../shared/modules';
 import { ActivityRail } from './components/ActivityRail';
 import { CommandPalette } from './components/CommandPalette';
 import { JobsPanel } from './components/JobsPanel';
+import { SectionPageHost } from './components/SectionPageHost';
 import { StartView } from './components/StartView';
 import { TitleBar } from './components/TitleBar';
 import { Tooltip } from './components/Tooltip';
 import { appBranding } from './config/public-env';
 import { useModuleStore } from './store/modules';
 import { useWorkspaceStore } from './store/workspace';
-import { motionDurations, stateMotion, useReducedMotion } from './lib/motion';
 import { applyPreferencesToDocument } from './lib/themes';
 import { ModuleView } from './modules/module-view';
 import { preferencesQueryOptions } from './hooks/usePreferences';
@@ -58,15 +57,10 @@ function WorkspaceTabHost({
   tabKey: string;
   children: ReactNode;
 }): React.JSX.Element {
-  const reduced = useReducedMotion();
-  const tabMotion = stateMotion(reduced, motionDurations.workspace);
-
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <m.div key={tabKey} className="workspace-tab-host" {...tabMotion}>
-        {children}
-      </m.div>
-    </AnimatePresence>
+    <SectionPageHost pageKey={tabKey} className="workspace-tab-host" variant="workspace">
+      {children}
+    </SectionPageHost>
   );
 }
 
@@ -290,7 +284,15 @@ export function App(): React.JSX.Element {
                 onRetryTab={retryTab}
                 onGoOverview={goOverview}
               >
-                <WorkspaceTabHost tabKey={`${workbenchTab?.id ?? 'none'}-${viewRecoveryKey}`}>
+                <WorkspaceTabHost
+                  tabKey={
+                    workbenchTab?.kind === 'welcome'
+                      ? `welcome-${viewRecoveryKey}`
+                      : workbenchTab?.kind === 'file'
+                        ? `file-${workbenchTab.relativePath ?? workbenchTab.id}-${viewRecoveryKey}`
+                        : `${workbenchTab?.kind ?? 'none'}-${workbenchTab?.id ?? 'none'}-${viewRecoveryKey}`
+                  }
+                >
                   <Suspense fallback={<WorkspaceLoading />}>
                     {moduleBlocked && (
                       <div className="empty-state module-blocked">

@@ -37,14 +37,6 @@ export type {
   VehicleGraphNode,
 } from './pipeline-types';
 export { affinityNearMatch, formatCoverageReport, runAnalysisPipeline } from './analysis';
-export {
-  analyzeWithCache,
-  createAnalysisCache,
-  reanalyzeChangedFiles,
-  isCacheHit,
-  contentHash,
-  type AnalysisCache,
-} from './incremental';
 
 export const metaFileKindSchema = z.enum([
   'vehicles',

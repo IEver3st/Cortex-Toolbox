@@ -63,28 +63,6 @@ const tokenOverridesSchema = z
   })
   .strict();
 
-export const wallpaperBlendSchema = z.object({
-  enabled: z.boolean(),
-  blurStrength: z.number().min(0).max(100),
-  wallpaperInfluence: z.number().min(0).max(100),
-  tintStrength: z.number().min(0).max(100),
-  saturation: z.number().min(0).max(100),
-  sidebarOpacity: z.number().min(0).max(100),
-  noiseTexture: z.boolean(),
-  reduceWhenInactive: z.boolean(),
-});
-
-export const DEFAULT_WALLPAPER_BLEND = {
-  enabled: false,
-  blurStrength: 48,
-  wallpaperInfluence: 62,
-  tintStrength: 28,
-  saturation: 72,
-  sidebarOpacity: 78,
-  noiseTexture: true,
-  reduceWhenInactive: true,
-} as const;
-
 export const storedPaletteSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().trim().min(1).max(80),
@@ -115,7 +93,6 @@ export type FoundationTokens = z.infer<typeof foundationTokensSchema>;
 export type AdvancedTokens = z.infer<typeof advancedTokensSchema>;
 export type FullThemeTokens = FoundationTokens & AdvancedTokens;
 export type TokenOverrides = z.infer<typeof tokenOverridesSchema>;
-export type WallpaperBlendSettings = z.infer<typeof wallpaperBlendSchema>;
 export type StoredPalette = z.infer<typeof storedPaletteSchema>;
 export type ThemeOverrides = z.infer<typeof themeOverridesSchema>;
 export type ThemeExport = z.infer<typeof themeExportSchema>;

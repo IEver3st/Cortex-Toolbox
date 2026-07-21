@@ -24,6 +24,7 @@ import {
   workbenchCategoryForField,
 } from './chassis-utils';
 import { ChassisHeader, SectionNav } from './components/ChassisHeader';
+import { SectionPageHost } from '../../components/SectionPageHost';
 import { PresetPreviewDialog } from './components/PresetPreviewDialog';
 import { ReviewSaveDialog } from './components/ReviewSaveDialog';
 import { AppearanceSection } from './sections/AppearanceSection';
@@ -346,94 +347,96 @@ export default function Chassis(): React.JSX.Element {
       />
 
       <div className="chassis-body">
-        {section === 'overview' ? (
-          <OverviewSection
-            config={config}
-            presetId={presetId}
-            presetBase={presetBase}
-            linkedFileCount={displayFiles.length}
-            unsavedCount={fieldChanges.length}
-            changes={fieldChanges}
-            relationships={relationships}
-            validationErrors={validationErrors}
-            onNavigate={setSection}
-          />
-        ) : null}
+        <SectionPageHost pageKey={section} className="chassis-section-host" variant="settings">
+          {section === 'overview' ? (
+            <OverviewSection
+              config={config}
+              presetId={presetId}
+              presetBase={presetBase}
+              linkedFileCount={displayFiles.length}
+              unsavedCount={fieldChanges.length}
+              changes={fieldChanges}
+              relationships={relationships}
+              validationErrors={validationErrors}
+              onNavigate={setSection}
+            />
+          ) : null}
 
-        {section === 'handling' ? (
-          <HandlingSection
-            handling={config.handling}
-            savedHandling={savedConfig.handling}
-            presetId={presetId}
-            presetBase={presetBase}
-            category={category}
-            search={search}
-            changedOnly={changedOnly}
-            showAdvanced={showAdvanced}
-            highlightedField={highlightedField}
-            categoryChanges={categoryChanges}
-            allChanges={fieldChanges}
-            inspectorOpen={inspectorOpen}
-            onCategoryChange={setCategory}
-            onSearchChange={setSearch}
-            onChangedOnlyChange={setChangedOnly}
-            onShowAdvancedChange={setShowAdvanced}
-            onFieldChange={setField}
-            onFieldReset={resetField}
-            onCategoryReset={resetCategory}
-            onSelectPreset={applyPreset}
-            onSelectChange={navigateToField}
-            onResetField={(key) => {
-              const field = HANDLING_FIELDS.find((candidate) => candidate.key === key);
-              if (field) resetField(field.key);
-            }}
-            onToggleInspector={() => setInspectorOpen((open) => !open)}
-          />
-        ) : null}
+          {section === 'handling' ? (
+            <HandlingSection
+              handling={config.handling}
+              savedHandling={savedConfig.handling}
+              presetId={presetId}
+              presetBase={presetBase}
+              category={category}
+              search={search}
+              changedOnly={changedOnly}
+              showAdvanced={showAdvanced}
+              highlightedField={highlightedField}
+              categoryChanges={categoryChanges}
+              allChanges={fieldChanges}
+              inspectorOpen={inspectorOpen}
+              onCategoryChange={setCategory}
+              onSearchChange={setSearch}
+              onChangedOnlyChange={setChangedOnly}
+              onShowAdvancedChange={setShowAdvanced}
+              onFieldChange={setField}
+              onFieldReset={resetField}
+              onCategoryReset={resetCategory}
+              onSelectPreset={applyPreset}
+              onSelectChange={navigateToField}
+              onResetField={(key) => {
+                const field = HANDLING_FIELDS.find((candidate) => candidate.key === key);
+                if (field) resetField(field.key);
+              }}
+              onToggleInspector={() => setInspectorOpen((open) => !open)}
+            />
+          ) : null}
 
-        {section === 'vehicle-setup' ? (
-          <VehicleSetupSection
-            identity={config}
-            handling={config.handling}
-            savedHandling={savedConfig.handling}
-            handlingSetup={config.handlingSetup}
-            onIdentityChange={updateIdentity}
-            onHandlingChange={setField}
-            onHandlingReset={resetField}
-            onSetupChange={updateSetup}
-            onSetupVectorChange={updateSetupVector}
-          />
-        ) : null}
+          {section === 'vehicle-setup' ? (
+            <VehicleSetupSection
+              identity={config}
+              handling={config.handling}
+              savedHandling={savedConfig.handling}
+              handlingSetup={config.handlingSetup}
+              onIdentityChange={updateIdentity}
+              onHandlingChange={setField}
+              onHandlingReset={resetField}
+              onSetupChange={updateSetup}
+              onSetupVectorChange={updateSetupVector}
+            />
+          ) : null}
 
-        {section === 'appearance' ? (
-          <AppearanceSection
-            appearance={config}
-            pulseDraftName={pulseDraft?.name ?? null}
-            onChange={(patch) => setConfig((current) => ({ ...current, ...patch }))}
-          />
-        ) : null}
+          {section === 'appearance' ? (
+            <AppearanceSection
+              appearance={config}
+              pulseDraftName={pulseDraft?.name ?? null}
+              onChange={(patch) => setConfig((current) => ({ ...current, ...patch }))}
+            />
+          ) : null}
 
-        {section === 'relationships' ? (
-          <RelationshipsSection links={relationships} issueCount={relationshipIssues} />
-        ) : null}
+          {section === 'relationships' ? (
+            <RelationshipsSection links={relationships} issueCount={relationshipIssues} />
+          ) : null}
 
-        {section === 'source' ? (
-          <SourceSection
-            files={displayFiles}
-            activeFile={activeFile}
-            compareMode={compareMode}
-            savedFiles={savedFiles}
-            onActiveFileChange={setActiveFile}
-            onFileContentChange={(name, content) => {
-              setSourceEdited(true);
-              setFiles((items) =>
-                items.map((item) => (item.name === name ? { ...item, content } : item)),
-              );
-            }}
-            onImport={(list) => void importFiles(list)}
-            onToggleCompare={() => setCompareMode((mode) => !mode)}
-          />
-        ) : null}
+          {section === 'source' ? (
+            <SourceSection
+              files={displayFiles}
+              activeFile={activeFile}
+              compareMode={compareMode}
+              savedFiles={savedFiles}
+              onActiveFileChange={setActiveFile}
+              onFileContentChange={(name, content) => {
+                setSourceEdited(true);
+                setFiles((items) =>
+                  items.map((item) => (item.name === name ? { ...item, content } : item)),
+                );
+              }}
+              onImport={(list) => void importFiles(list)}
+              onToggleCompare={() => setCompareMode((mode) => !mode)}
+            />
+          ) : null}
+        </SectionPageHost>
       </div>
 
       <PresetPreviewDialog

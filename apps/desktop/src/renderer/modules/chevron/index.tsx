@@ -2,21 +2,21 @@ import {
   Download,
   Eye,
   FileUp,
+  Flashlight,
   Grid3X3,
   ImageDown,
   Layers3,
   Maximize2,
-  Moon,
   RotateCcw,
   Save,
   ScanLine,
   Sparkles,
-  Sun,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { PageHeader, Toggle } from '../../components/UiPrimitives';
+import { useReducedMotion } from '../../lib/motion';
 import { useWorkbenchDraftStore } from '../../store/workbench';
 import {
   DEFAULT_CHEVRON_DRAFT,
@@ -469,7 +469,9 @@ const ARTBOARD_SIZES: readonly (readonly [number, number])[] = [
 
 export default function ChevronBuilder(): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const textureInputRef = useRef<HTMLInputElement>(null);
+  const reducedMotion = useReducedMotion();
   const setChevronDraft = useWorkbenchDraftStore((state) => state.setChevron);
   const stored = useMemo(() => readChevronBuilder(globalThis.localStorage), []);
   const [width, setWidth] = useState(stored.draft.width);
@@ -485,7 +487,10 @@ export default function ChevronBuilder(): React.JSX.Element {
     stored.draft.textPosition,
   );
   const [finish, setFinish] = useState<Finish>(stored.draft.finish);
-  const [preview, setPreview] = useState<PreviewMode>('day');
+  const [maskPreview, setMaskPreview] = useState(false);
+  const [flashlight, setFlashlight] = useState(false);
+  const [spotlightEngaged, setSpotlightEngaged] = useState(false);
+  const [spotlight, setSpotlight] = useState({ x: 50, y: 50 });
   const [reflectivePrimary, setReflectivePrimary] = useState(stored.draft.reflectivePrimary);
   const [reflectiveSecondary, setReflectiveSecondary] = useState(stored.draft.reflectiveSecondary);
   const [texture, setTexture] = useState<ChevronTexture>(stored.draft.texture);
@@ -495,6 +500,21 @@ export default function ChevronBuilder(): React.JSX.Element {
   const [selectedPreset, setSelectedPreset] = useState('fire-apparatus');
   const [presetFilter, setPresetFilter] = useState<'all' | PresetGroup>('all');
   const [zoom, setZoom] = useState(100);
+  const preview: PreviewMode = maskPreview ? 'mask' : flashlight ? 'headlamp' : 'day';
+  const lightsOut = flashlight && !maskPreview;
+  const showLightsOutOverlay = lightsOut && !reducedMotion;
+  const spotlightAiming = showLightsOutOverlay && spotlightEngaged;
+
+  const updateSpotlightFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    setSpotlight({
+      x: Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100)),
+    });
+  };
 
   const options = useMemo(
     () => ({
@@ -534,6 +554,29 @@ export default function ChevronBuilder(): React.JSX.Element {
       width,
     ],
   );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'f' && event.key !== 'F') return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (maskPreview) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest('input, textarea, select, [contenteditable="true"]'))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setFlashlight((on) => {
+        if (on) setSpotlightEngaged(false);
+        return !on;
+      });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [maskPreview]);
 
   useEffect(() => {
     if (canvasRef.current)
@@ -1042,22 +1085,31 @@ export default function ChevronBuilder(): React.JSX.Element {
             <div className="chevron-preview-modes" role="group" aria-label="Preview lighting">
               <button
                 type="button"
-                aria-pressed={preview === 'day'}
-                onClick={() => setPreview('day')}
+                aria-pressed={flashlight && !maskPreview}
+                disabled={maskPreview}
+                title="Turn off lights and preview reflective return (F)"
+                onClick={() => {
+                  setFlashlight((on) => {
+                    if (on) setSpotlightEngaged(false);
+                    return !on;
+                  });
+                }}
               >
-                <Sun aria-hidden="true" /> Daylight
+                <Flashlight aria-hidden="true" /> Flashlight
               </button>
               <button
                 type="button"
-                aria-pressed={preview === 'headlamp'}
-                onClick={() => setPreview('headlamp')}
-              >
-                <Moon aria-hidden="true" /> Headlamp
-              </button>
-              <button
-                type="button"
-                aria-pressed={preview === 'mask'}
-                onClick={() => setPreview('mask')}
+                aria-pressed={maskPreview}
+                onClick={() => {
+                  setMaskPreview((value) => {
+                    const next = !value;
+                    if (next) {
+                      setFlashlight(false);
+                      setSpotlightEngaged(false);
+                    }
+                    return next;
+                  });
+                }}
               >
                 <ScanLine aria-hidden="true" /> Mask
               </button>
@@ -1083,7 +1135,19 @@ export default function ChevronBuilder(): React.JSX.Element {
               </button>
             </div>
           </div>
-          <div className={`chevron-canvas-stage is-${preview}`}>
+          <div
+            ref={stageRef}
+            className={`chevron-canvas-stage is-${preview}${spotlightAiming ? ' has-spotlight' : ''}`}
+            onPointerMove={(event) => {
+              if (!lightsOut || maskPreview || reducedMotion) return;
+              setSpotlightEngaged(true);
+              updateSpotlightFromPointer(event);
+            }}
+            onPointerLeave={() => {
+              setSpotlightEngaged(false);
+              setSpotlight({ x: 50, y: 50 });
+            }}
+          >
             <div className="chevron-canvas-wrap" style={{ width: `${zoom}%` }}>
               <span className="chevron-artboard-label">
                 {width} × {height} px
@@ -1094,13 +1158,31 @@ export default function ChevronBuilder(): React.JSX.Element {
               <span className="chevron-artboard-corner bottom-left" aria-hidden="true" />
               <span className="chevron-artboard-corner bottom-right" aria-hidden="true" />
             </div>
+            {showLightsOutOverlay ? (
+              <div
+                className={`chevron-spotlight-overlay${spotlightActive ? ' is-engaged' : ''}`}
+                style={
+                  spotlightActive
+                    ? ({
+                        '--spotlight-x': `${spotlight.x}%`,
+                        '--spotlight-y': `${spotlight.y}%`,
+                      } as React.CSSProperties)
+                    : undefined
+                }
+                aria-hidden="true"
+              />
+            ) : null}
           </div>
           <footer className="chevron-preview-footer">
             <span>
               {preview === 'mask'
                 ? 'White areas become the material-guide output. Texture overlays stay out of this mask.'
-                : preview === 'headlamp'
-                  ? 'A visual simulation of returned light, not an in-game shader preview.'
+                : flashlight
+                  ? reducedMotion
+                    ? 'Flashlight preview shows reflective return across the full pattern.'
+                    : spotlightEngaged
+                      ? 'Move the flashlight over the pattern to preview reflective return.'
+                      : 'Lights off. Move over the preview to aim the flashlight.'
                   : 'Artwork export stays clean: guides and preview lighting are excluded.'}
             </span>
             <span>

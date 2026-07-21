@@ -30,9 +30,12 @@ import {
   DEFAULT_PREFERENCES,
   normalizePreferences,
   type Preferences,
+  type UpdateStatus,
 } from '../../shared/contracts';
 import { appBranding } from '../config/public-env';
+import { brandIconUrl } from '../lib/brand-icon';
 import { formatResultError, unwrap } from '../lib/result';
+import { SectionPageHost } from './SectionPageHost';
 import { applyPreferencesToDocument } from '../lib/themes';
 import { ThemeStudio } from './theme-studio/ThemeStudio';
 import { useModuleStore } from '../store/modules';
@@ -40,8 +43,15 @@ import { useWorkspaceStore } from '../store/workspace';
 import { Select } from './Select';
 import { SidebarOrderList } from './SidebarOrderList';
 import { BugReportForm } from './BugReportForm';
+import { ActionButton } from './ActionButton';
 import { CortexMark, Toggle } from './UiPrimitives';
-import { updateStatusLabel, useUpdateStatus } from '../hooks/useUpdateStatus';
+import {
+  updateActionLabel,
+  updateStatusDetail,
+  updateStatusLabel,
+  updateStatusTone,
+  useUpdateStatus,
+} from '../hooks/useUpdateStatus';
 import { PREFERENCES_QUERY_KEY, usePreferences } from '../hooks/usePreferences';
 
 type SectionId =
@@ -208,12 +218,141 @@ function StatusRow({
       </div>
       <div className="settings-row-control">
         <span
-          className={`settings-status-pill${statusTone === 'muted' ? ' is-muted' : ''}`}
+          className={`settings-inline-status${statusTone === 'muted' ? ' is-muted' : ' is-success'}`}
           aria-label={`${label}: ${status}`}
         >
+          <span className="settings-inline-status-dot" aria-hidden="true" />
           {status}
         </span>
       </div>
+    </div>
+  );
+}
+
+function ReleaseBranchPreview({ branch }: { branch: string }): React.JSX.Element {
+  const isDeveloper = branch === 'developer';
+  return (
+    <div className="release-branch-preview">
+      <img src={brandIconUrl(isDeveloper ? 'developer' : 'stable')} alt="" />
+      <span>
+        <strong>{isDeveloper ? 'Developer' : 'Stable'} channel</strong>
+        <small>
+          {isDeveloper
+            ? 'Pre-release builds and the developer app icon.'
+            : 'Production releases and the stable app icon.'}
+        </small>
+      </span>
+    </div>
+  );
+}
+
+function UpdatesPanel({
+  updateStatus,
+  releaseBranch,
+  autoDownload,
+  updateBusy,
+  onAction,
+}: {
+  updateStatus: UpdateStatus | undefined;
+  releaseBranch: string;
+  autoDownload: boolean;
+  updateBusy: boolean;
+  onAction: (action: 'check' | 'download' | 'install') => void | Promise<void>;
+}): React.JSX.Element {
+  const phase = updateStatus?.phase ?? 'idle';
+  const tone = updateStatusTone(updateStatus);
+  const installedVersion = updateStatus?.currentVersion ?? appBranding.version;
+  const targetVersion = updateStatus?.availableVersion;
+  const hasTargetVersion =
+    Boolean(targetVersion) &&
+    (phase === 'available' || phase === 'downloading' || phase === 'ready');
+  const action: 'check' | 'download' | 'install' | null =
+    phase === 'disabled'
+      ? null
+      : phase === 'available'
+        ? 'download'
+        : phase === 'ready'
+          ? 'install'
+          : phase === 'downloading'
+            ? null
+            : 'check';
+  const actionBusy = updateBusy || phase === 'checking';
+  const progress =
+    phase === 'downloading' && updateStatus?.progress != null
+      ? Math.round(updateStatus.progress * 100)
+      : null;
+  const showReleaseNotes =
+    Boolean(updateStatus?.releaseUrl) &&
+    (phase === 'available' || phase === 'ready' || phase === 'uptodate');
+
+  const openReleaseNotes = async () => {
+    if (!updateStatus?.releaseUrl) return;
+    const result = await window.cortex.system.openExternal({ url: updateStatus.releaseUrl });
+    if (!result.ok) toast.error(formatResultError(result.error));
+  };
+
+  return (
+    <div className="settings-update-panel">
+      <div className="settings-update-head">
+        <div className="settings-update-head-copy">
+          <p className="settings-row-label">Software updates</p>
+          <p className="settings-update-version" aria-label="Installed version">
+            <span>v{installedVersion}</span>
+            {hasTargetVersion && targetVersion ? (
+              <>
+                <span className="settings-update-arrow" aria-hidden="true">
+                  →
+                </span>
+                <span className="settings-update-target">v{targetVersion}</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+        <div className="settings-update-head-action">
+          {action ? (
+            <ActionButton
+              variant={action === 'check' ? 'default' : 'primary'}
+              className="compact"
+              busy={actionBusy}
+              busyLabel={updateActionLabel(updateStatus, true)}
+              disabled={actionBusy}
+              onClick={() => onAction(action)}
+            >
+              {updateActionLabel(updateStatus, false)}
+            </ActionButton>
+          ) : null}
+        </div>
+      </div>
+      <div className="settings-update-statusline">
+        <span className={`settings-inline-status is-${tone}`} role="status" aria-live="polite">
+          <span className="settings-inline-status-dot" aria-hidden="true" />
+          <span>{updateStatusLabel(updateStatus)}</span>
+        </span>
+      </div>
+      <p className="settings-update-detail">
+        {updateStatusDetail(updateStatus, releaseBranch, appBranding.version, autoDownload)}
+      </p>
+      {progress != null ? (
+        <div
+          className="settings-update-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+          aria-label="Download progress"
+        >
+          <span style={{ width: `${progress}%` }} />
+        </div>
+      ) : null}
+      {showReleaseNotes ? (
+        <button
+          type="button"
+          className="text-button compact settings-update-release-link"
+          onClick={() => void openReleaseNotes()}
+        >
+          Release notes
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -346,13 +485,6 @@ export function SettingsView(): React.JSX.Element {
     }
   };
 
-  const updateTone =
-    updateStatus?.phase === 'error'
-      ? 'muted'
-      : updateStatus?.phase === 'available' || updateStatus?.phase === 'ready'
-        ? 'success'
-        : 'muted';
-
   return (
     <div className="cursor-settings tool-view">
       <aside className="cursor-settings-sidebar">
@@ -391,383 +523,342 @@ export function SettingsView(): React.JSX.Element {
       </aside>
 
       <main className={`cursor-settings-main${active === 'appearance' ? ' is-theme-studio' : ''}`}>
-        {active !== 'appearance' ? (
-          <header className="cursor-settings-main-header">
-            <div>
-              <h1>{TITLES[active]}</h1>
-              <p>
-                {SECTION_LEAD[active] ??
-                  'Changes save automatically and stay local to this device.'}
-              </p>
-            </div>
-            <div className="cursor-settings-main-actions">
-              <button type="button" className={resetArmed ? 'is-armed' : ''} onClick={restore}>
-                <RotateCcw aria-hidden="true" />{' '}
-                {resetArmed ? 'Confirm restore' : 'Restore defaults'}
-              </button>
-            </div>
-          </header>
-        ) : null}
-
-        <div
-          className={`cursor-settings-content${active === 'appearance' ? ' is-theme-studio' : ''}`}
-        >
-          {active === 'appearance' ? (
-            <ThemeStudio draft={draft} saved={saved} onChange={setDraft} />
-          ) : null}
-
-          {active === 'general' ? (
-            <SettingsGroup title="Interface">
-              <Row
-                label="Interface scale"
-                description="Scale navigation, controls, and workspace content together."
-                htmlFor="interface-scale"
-                control={
-                  <Select
-                    id="interface-scale"
-                    value={String(draft.interfaceScale)}
-                    options={[0.85, 0.9, 1, 1.1, 1.2, 1.3].map((value) => ({
-                      value: String(value),
-                      label: `${Math.round(value * 100)}%`,
-                    }))}
-                    onChange={(value) => update('interfaceScale', Number(value))}
-                  />
-                }
-              />
-              <Row
-                label="UI font size"
-                description="Set the base interface text size without changing code."
-                htmlFor="ui-font-size"
-                control={
-                  <Select
-                    id="ui-font-size"
-                    value={String(draft.uiFontSize)}
-                    options={[13, 14, 15, 16, 17, 18].map((value) => ({
-                      value: String(value),
-                      label: `${value}px`,
-                    }))}
-                    onChange={(value) => update('uiFontSize', Number(value))}
-                  />
-                }
-              />
-              <Row
-                label="Pointer cursors"
-                description="Use a pointer cursor on interactive controls."
-                htmlFor="pointer-cursor"
-                control={
-                  <Toggle
-                    id="pointer-cursor"
-                    name="pointerCursor"
-                    checked={draft.pointerCursor}
-                    onChange={(value) => update('pointerCursor', value)}
-                  />
-                }
-              />
-            </SettingsGroup>
-          ) : null}
-
-          {active === 'editor' ? (
-            <SettingsGroup title="Code editor">
-              <Row
-                label="Code font size"
-                description="Set code size independently from the rest of the interface."
-                htmlFor="editor-font-size"
-                control={
-                  <Select
-                    id="editor-font-size"
-                    value={String(draft.editorFontSize)}
-                    options={Array.from({ length: 14 }, (_, index) => index + 11).map((value) => ({
-                      value: String(value),
-                      label: `${value}px`,
-                    }))}
-                    onChange={(value) => update('editorFontSize', Number(value))}
-                  />
-                }
-              />
-              <pre className="editor-preview" style={{ fontSize: draft.editorFontSize }}>
-                <code>
-                  <span>data_file</span> 'HANDLING_FILE' 'data/handling.meta'{`\n`}
-                  <span>data_file</span> 'CARCOLS_FILE' 'data/carcols.meta'
-                </code>
-              </pre>
-            </SettingsGroup>
-          ) : null}
-
-          {active === 'modules' ? (
-            <SettingsGroup title="Available modules">
-              <p className="settings-note">
-                Enable only the tools you use. Disabling a module closes its open tabs but does not
-                touch project files.
-              </p>
-              <div className="settings-module-list">
-                {MODULE_CATALOG.filter((module) => module.category !== 'system').map((module) => {
-                  const enabled = installedIds.has(module.id);
-                  const busy = pendingModuleId === module.id;
-                  return (
-                    <div className="settings-module-row" key={module.id}>
-                      <div>
-                        <strong>{module.name}</strong>
-                        <p>{module.description}</p>
-                        <small>{module.tags.join(' · ')}</small>
-                      </div>
-                      <Toggle
-                        id={`module-${module.id}`}
-                        name={`module-${module.id}`}
-                        ariaLabel={`${enabled ? 'Disable' : 'Enable'} ${module.name}`}
-                        checked={enabled}
-                        disabled={busy}
-                        onChange={(value) => void toggleModule(module.id, value)}
-                      />
-                    </div>
-                  );
-                })}
+        <SectionPageHost pageKey={active} className="cursor-settings-page-host" variant="settings">
+          {active !== 'appearance' ? (
+            <header className="cursor-settings-main-header">
+              <div>
+                <h1>{TITLES[active]}</h1>
+                <p>
+                  {SECTION_LEAD[active] ??
+                    'Changes save automatically and stay local to this device.'}
+                </p>
               </div>
-            </SettingsGroup>
+              <div className="cursor-settings-main-actions">
+                <button type="button" className={resetArmed ? 'is-armed' : ''} onClick={restore}>
+                  <RotateCcw aria-hidden="true" />{' '}
+                  {resetArmed ? 'Confirm restore' : 'Restore defaults'}
+                </button>
+              </div>
+            </header>
           ) : null}
 
-          {active === 'sidebar' ? (
-            <>
-              <SettingsGroup title="Behavior">
+          <div
+            className={`cursor-settings-content${active === 'appearance' ? ' is-theme-studio' : ''}`}
+          >
+            {active === 'appearance' ? (
+              <ThemeStudio draft={draft} saved={saved} onChange={setDraft} />
+            ) : null}
+
+            {active === 'general' ? (
+              <SettingsGroup title="Interface">
                 <Row
-                  label="Navigation density"
-                  description="Compact mode reduces row height while keeping the same targets."
-                  htmlFor="sidebar-density"
+                  label="Interface scale"
+                  description="Scale navigation, controls, and workspace content together."
+                  htmlFor="interface-scale"
                   control={
                     <Select
-                      id="sidebar-density"
-                      value={draft.sidebarDensity}
-                      options={[
-                        { value: 'comfortable', label: 'Comfortable' },
-                        { value: 'compact', label: 'Compact' },
-                      ]}
-                      onChange={(value) => update('sidebarDensity', value)}
+                      id="interface-scale"
+                      value={String(draft.interfaceScale)}
+                      options={[0.85, 0.9, 1, 1.1, 1.2, 1.3].map((value) => ({
+                        value: String(value),
+                        label: `${Math.round(value * 100)}%`,
+                      }))}
+                      onChange={(value) => update('interfaceScale', Number(value))}
                     />
                   }
                 />
                 <Row
-                  label="Category labels"
-                  description="Show Primary workflow and Creative tools headings when expanded."
-                  htmlFor="sidebar-labels"
+                  label="UI font size"
+                  description="Set the base interface text size without changing code."
+                  htmlFor="ui-font-size"
+                  control={
+                    <Select
+                      id="ui-font-size"
+                      value={String(draft.uiFontSize)}
+                      options={[13, 14, 15, 16, 17, 18].map((value) => ({
+                        value: String(value),
+                        label: `${value}px`,
+                      }))}
+                      onChange={(value) => update('uiFontSize', Number(value))}
+                    />
+                  }
+                />
+                <Row
+                  label="Pointer cursors"
+                  description="Use a pointer cursor on interactive controls."
+                  htmlFor="pointer-cursor"
                   control={
                     <Toggle
-                      id="sidebar-labels"
-                      name="sidebarLabels"
-                      checked={draft.sidebarCategoryLabels}
-                      onChange={(value) => update('sidebarCategoryLabels', value)}
+                      id="pointer-cursor"
+                      name="pointerCursor"
+                      checked={draft.pointerCursor}
+                      onChange={(value) => update('pointerCursor', value)}
                     />
                   }
                 />
               </SettingsGroup>
-              <SettingsGroup title="Module order">
-                <SidebarOrderList />
+            ) : null}
+
+            {active === 'editor' ? (
+              <SettingsGroup title="Code editor">
+                <Row
+                  label="Code font size"
+                  description="Set code size independently from the rest of the interface."
+                  htmlFor="editor-font-size"
+                  control={
+                    <Select
+                      id="editor-font-size"
+                      value={String(draft.editorFontSize)}
+                      options={Array.from({ length: 14 }, (_, index) => index + 11).map(
+                        (value) => ({
+                          value: String(value),
+                          label: `${value}px`,
+                        }),
+                      )}
+                      onChange={(value) => update('editorFontSize', Number(value))}
+                    />
+                  }
+                />
+                <pre className="editor-preview" style={{ fontSize: draft.editorFontSize }}>
+                  <code>
+                    <span>data_file</span> 'HANDLING_FILE' 'data/handling.meta'{`\n`}
+                    <span>data_file</span> 'CARCOLS_FILE' 'data/carcols.meta'
+                  </code>
+                </pre>
               </SettingsGroup>
-            </>
-          ) : null}
+            ) : null}
 
-          {active === 'accessibility' ? (
-            <SettingsGroup title="Motion">
-              <Row
-                label="Reduce interface motion"
-                description="Removes workspace and panel movement while preserving immediate state feedback."
-                htmlFor="reduced-motion"
-                control={
-                  <Toggle
-                    id="reduced-motion"
-                    name="reducedMotion"
-                    checked={draft.reducedMotion}
-                    onChange={(value) => update('reducedMotion', value)}
-                  />
-                }
-              />
-              <p className="settings-note">
-                System reduced-motion preferences are also honored even when this setting is off.
-              </p>
-            </SettingsGroup>
-          ) : null}
-
-          {active === 'integrations' ? (
-            <SettingsGroup title="YTD extraction">
-              <Row
-                label="YTDToolio executable"
-                description="Optional local helper used only for YTD to ZIP extraction. DDS conversion is built in."
-                htmlFor="ytd-tool-path"
-                control={
-                  <input
-                    id="ytd-tool-path"
-                    value={draft.ytdToolPath}
-                    placeholder="C:\\Tools\\YTDToolio.exe"
-                    onChange={(event) => update('ytdToolPath', event.target.value)}
-                  />
-                }
-              />
-              <p className="settings-note">
-                Cortex never downloads or runs a converter silently. The exact executable path is
-                stored locally and invoked only from Texture Converter.
-              </p>
-            </SettingsGroup>
-          ) : null}
-
-          {active === 'about' ? (
-            <>
-              <SettingsGroup title="Application">
-                <div className="about-settings-row">
-                  <CortexMark size="large" />
-                  <div>
-                    <h3>{appBranding.productName}</h3>
-                    <p>Free tools for people who make things.</p>
-                    <small>
-                      Version {updateStatus?.currentVersion ?? appBranding.version} ·{' '}
-                      {appBranding.channel} channel · GPL-3.0
-                    </small>
-                  </div>
+            {active === 'modules' ? (
+              <SettingsGroup title="Available modules">
+                <p className="settings-note">
+                  Enable only the tools you use. Disabling a module closes its open tabs but does
+                  not touch project files.
+                </p>
+                <div className="settings-module-list">
+                  {MODULE_CATALOG.filter((module) => module.category !== 'system').map((module) => {
+                    const enabled = installedIds.has(module.id);
+                    const busy = pendingModuleId === module.id;
+                    return (
+                      <div className="settings-module-row" key={module.id}>
+                        <div>
+                          <strong>{module.name}</strong>
+                          <p>{module.description}</p>
+                          <small>{module.tags.join(' · ')}</small>
+                        </div>
+                        <Toggle
+                          id={`module-${module.id}`}
+                          name={`module-${module.id}`}
+                          ariaLabel={`${enabled ? 'Disable' : 'Enable'} ${module.name}`}
+                          checked={enabled}
+                          disabled={busy}
+                          onChange={(value) => void toggleModule(module.id, value)}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </SettingsGroup>
-              <SettingsGroup title="Updates">
-                <Row
-                  label="Automatic updates"
-                  description="Check for new releases in the background and download them when available."
-                  htmlFor="auto-download-updates"
-                  control={
-                    <Toggle
-                      id="auto-download-updates"
-                      name="autoDownloadUpdates"
-                      checked={draft.autoDownloadUpdates}
-                      onChange={(value) => update('autoDownloadUpdates', value)}
-                    />
-                  }
-                />
-                <Row
-                  label="Release branch"
-                  description="Stable is recommended for production work. Developer receives pre-release builds."
-                  htmlFor="release-branch"
-                  control={
-                    <Select
-                      id="release-branch"
-                      value={draft.releaseBranch}
-                      options={[
-                        { value: 'stable', label: 'Stable' },
-                        { value: 'developer', label: 'Developer' },
-                      ]}
-                      onChange={(value) => update('releaseBranch', value)}
-                    />
-                  }
-                />
-                <Row
-                  label="Experimental tools"
-                  description="Show extension tooling that may change between releases."
-                  htmlFor="experimental-tools"
-                  control={
-                    <Toggle
-                      id="experimental-tools"
-                      name="experimentalTools"
-                      checked={draft.experimentalTools}
-                      onChange={(value) => update('experimentalTools', value)}
-                    />
-                  }
-                />
-                <StatusRow
-                  label="Update status"
-                  description={
-                    updateStatus?.message ??
-                    'Cortex checks GitHub releases for this build when automatic updates are enabled.'
-                  }
-                  status={updateStatusLabel(updateStatus)}
-                  statusTone={updateTone}
-                />
-                {updateStatus?.phase === 'downloading' && updateStatus.progress != null ? (
-                  <div
-                    className="settings-update-progress"
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round(updateStatus.progress * 100)}
-                  >
-                    <span style={{ width: `${Math.round(updateStatus.progress * 100)}%` }} />
-                  </div>
-                ) : null}
-                <div className="settings-update-actions">
-                  <button
-                    type="button"
-                    disabled={
-                      updateBusy ||
-                      updateStatus?.phase === 'checking' ||
-                      updateStatus?.phase === 'downloading'
+            ) : null}
+
+            {active === 'sidebar' ? (
+              <>
+                <SettingsGroup title="Behavior">
+                  <Row
+                    label="Navigation density"
+                    description="Compact mode reduces row height while keeping the same targets."
+                    htmlFor="sidebar-density"
+                    control={
+                      <Select
+                        id="sidebar-density"
+                        value={draft.sidebarDensity}
+                        options={[
+                          { value: 'comfortable', label: 'Comfortable' },
+                          { value: 'compact', label: 'Compact' },
+                        ]}
+                        onChange={(value) => update('sidebarDensity', value)}
+                      />
                     }
-                    onClick={() => void runUpdateAction('check')}
-                  >
-                    Check for updates
-                  </button>
-                  {updateStatus?.phase === 'available' ? (
-                    <button
-                      type="button"
-                      className="is-primary"
-                      disabled={updateBusy}
-                      onClick={() => void runUpdateAction('download')}
-                    >
-                      Download update
-                    </button>
-                  ) : null}
-                  {updateStatus?.phase === 'ready' ? (
-                    <button
-                      type="button"
-                      className="is-primary"
-                      disabled={updateBusy}
-                      onClick={() => void runUpdateAction('install')}
-                    >
-                      Install and restart
-                    </button>
-                  ) : null}
-                </div>
-              </SettingsGroup>
-            </>
-          ) : null}
+                  />
+                  <Row
+                    label="Category labels"
+                    description="Show Primary workflow and Creative tools headings when expanded."
+                    htmlFor="sidebar-labels"
+                    control={
+                      <Toggle
+                        id="sidebar-labels"
+                        name="sidebarLabels"
+                        checked={draft.sidebarCategoryLabels}
+                        onChange={(value) => update('sidebarCategoryLabels', value)}
+                      />
+                    }
+                  />
+                </SettingsGroup>
+                <SettingsGroup title="Module order">
+                  <SidebarOrderList />
+                </SettingsGroup>
+              </>
+            ) : null}
 
-          {active === 'privacy' ? (
-            <>
-              <SettingsGroup title="Data handling">
-                <StatusRow
-                  label="Project files"
-                  description="Read only from the workspace you choose."
-                  status="Local"
+            {active === 'accessibility' ? (
+              <SettingsGroup title="Motion">
+                <Row
+                  label="Reduce interface motion"
+                  description="Removes workspace and panel movement while preserving immediate state feedback."
+                  htmlFor="reduced-motion"
+                  control={
+                    <Toggle
+                      id="reduced-motion"
+                      name="reducedMotion"
+                      checked={draft.reducedMotion}
+                      onChange={(value) => update('reducedMotion', value)}
+                    />
+                  }
                 />
-                <StatusRow
-                  label="Telemetry"
-                  description="No usage analytics or behavioral tracking."
-                  status="Off"
-                />
-                <StatusRow
-                  label="Core network access"
-                  description="Validation, editing, conversion, and packaging run offline."
-                  status="None"
-                />
-                <StatusRow
-                  label="External tools"
-                  description="Run only after explicit configuration and action."
-                  status="Controlled"
-                  statusTone="muted"
-                />
+                <p className="settings-note">
+                  System reduced-motion preferences are also honored even when this setting is off.
+                </p>
               </SettingsGroup>
-              <SettingsGroup title="Stored on this device">
-                <StatusRow
-                  label="Preferences"
-                  description="Theme, layout, module order, and tool paths."
-                  status="Local"
-                />
-                <StatusRow
-                  label="Workspace cache"
-                  description="Indexed resource metadata for the open workspace."
-                  status="Local"
-                />
-              </SettingsGroup>
-            </>
-          ) : null}
+            ) : null}
 
-          {active === 'support' ? (
-            <SettingsGroup title="GitHub Issue Reporter">
-              <BugReportForm />
-            </SettingsGroup>
-          ) : null}
-        </div>
+            {active === 'integrations' ? (
+              <SettingsGroup title="YTD extraction">
+                <Row
+                  label="YTDToolio executable"
+                  description="Optional local helper used only for YTD to ZIP extraction. DDS conversion is built in."
+                  htmlFor="ytd-tool-path"
+                  control={
+                    <input
+                      id="ytd-tool-path"
+                      value={draft.ytdToolPath}
+                      placeholder="C:\\Tools\\YTDToolio.exe"
+                      onChange={(event) => update('ytdToolPath', event.target.value)}
+                    />
+                  }
+                />
+                <p className="settings-note">
+                  Cortex never downloads or runs a converter silently. The exact executable path is
+                  stored locally and invoked only from Texture Converter.
+                </p>
+              </SettingsGroup>
+            ) : null}
+
+            {active === 'about' ? (
+              <>
+                <SettingsGroup title="Application">
+                  <div className="about-settings-row">
+                    <CortexMark size="large" />
+                    <div>
+                      <h3>{appBranding.productName}</h3>
+                      <p>Free tools for people who make things.</p>
+                      <small>
+                        Version {updateStatus?.currentVersion ?? appBranding.version} ·{' '}
+                        {appBranding.channel} channel · GPL-3.0
+                      </small>
+                    </div>
+                  </div>
+                </SettingsGroup>
+                <SettingsGroup title="Updates">
+                  <Row
+                    label="Automatic updates"
+                    description="Check for new releases in the background and download them when available."
+                    htmlFor="auto-download-updates"
+                    control={
+                      <Toggle
+                        id="auto-download-updates"
+                        name="autoDownloadUpdates"
+                        checked={draft.autoDownloadUpdates}
+                        onChange={(value) => update('autoDownloadUpdates', value)}
+                      />
+                    }
+                  />
+                  <Row
+                    label="Release branch"
+                    description="Stable is recommended for production work. Developer receives pre-release builds."
+                    htmlFor="release-branch"
+                    control={
+                      <Select
+                        id="release-branch"
+                        value={draft.releaseBranch}
+                        options={[
+                          { value: 'stable', label: 'Stable' },
+                          { value: 'developer', label: 'Developer' },
+                        ]}
+                        onChange={(value) => update('releaseBranch', value)}
+                      />
+                    }
+                  />
+                  <ReleaseBranchPreview branch={draft.releaseBranch} />
+                  <Row
+                    label="Experimental tools"
+                    description="Show extension tooling that may change between releases."
+                    htmlFor="experimental-tools"
+                    control={
+                      <Toggle
+                        id="experimental-tools"
+                        name="experimentalTools"
+                        checked={draft.experimentalTools}
+                        onChange={(value) => update('experimentalTools', value)}
+                      />
+                    }
+                  />
+                  <UpdatesPanel
+                    updateStatus={updateStatus}
+                    releaseBranch={draft.releaseBranch}
+                    autoDownload={draft.autoDownloadUpdates}
+                    updateBusy={updateBusy}
+                    onAction={runUpdateAction}
+                  />
+                </SettingsGroup>
+              </>
+            ) : null}
+
+            {active === 'privacy' ? (
+              <>
+                <SettingsGroup title="Data handling">
+                  <StatusRow
+                    label="Project files"
+                    description="Read only from the workspace you choose."
+                    status="Local"
+                  />
+                  <StatusRow
+                    label="Telemetry"
+                    description="No usage analytics or behavioral tracking."
+                    status="Off"
+                  />
+                  <StatusRow
+                    label="Core network access"
+                    description="Validation, editing, conversion, and packaging run offline."
+                    status="None"
+                  />
+                  <StatusRow
+                    label="External tools"
+                    description="Run only after explicit configuration and action."
+                    status="Controlled"
+                    statusTone="muted"
+                  />
+                </SettingsGroup>
+                <SettingsGroup title="Stored on this device">
+                  <StatusRow
+                    label="Preferences"
+                    description="Theme, layout, module order, and tool paths."
+                    status="Local"
+                  />
+                  <StatusRow
+                    label="Workspace cache"
+                    description="Indexed resource metadata for the open workspace."
+                    status="Local"
+                  />
+                </SettingsGroup>
+              </>
+            ) : null}
+
+            {active === 'support' ? (
+              <SettingsGroup title="GitHub Issue Reporter">
+                <BugReportForm />
+              </SettingsGroup>
+            ) : null}
+          </div>
+        </SectionPageHost>
       </main>
     </div>
   );

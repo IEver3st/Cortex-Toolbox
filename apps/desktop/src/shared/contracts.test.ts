@@ -117,7 +117,7 @@ describe('preference migration', () => {
     expect(preferenceSchema.strict().safeParse(normalized).success).toBe(true);
   });
 
-  it('preserves theme overrides and wallpaper material settings through normalization', () => {
+  it('preserves theme overrides through normalization', () => {
     const themed = {
       ...DEFAULT_PREFERENCES,
       themePreset: 'blueprint' as const,
@@ -126,15 +126,6 @@ describe('preference migration', () => {
         basePaletteId: 'blueprint',
         dark: { canvas: '#101820', editorCanvas: '#0c131a' },
         light: { signal: '#28748a' },
-      },
-      wallpaperBlendDark: {
-        ...DEFAULT_PREFERENCES.wallpaperBlendDark,
-        enabled: true,
-        blurStrength: 33,
-        wallpaperInfluence: 81,
-        tintStrength: 17,
-        saturation: 64,
-        sidebarOpacity: 73,
       },
     };
 

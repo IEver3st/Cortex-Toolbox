@@ -49,11 +49,10 @@ import {
   type ActivityTool,
 } from '../lib/activity-history';
 import { copyText } from '../lib/clipboard';
-import { motionDurations, transition, useReducedMotion } from '../lib/motion';
+import { motionDurations, panelRevealMotion, stateMotion, useReducedMotion } from '../lib/motion';
 import { formatRelativeTime } from '../lib/relative-time';
 import { unwrap } from '../lib/result';
 import { useWorkspaceStore, type EditorTab } from '../store/workspace';
-import { CortexMark } from './UiPrimitives';
 import { type ContextMenuItem } from './ContextMenu';
 
 const formSchema = z.object({
@@ -834,14 +833,8 @@ export function HomeModuleHub(): React.JSX.Element {
     </Dialog.Root>
   );
 
-  const stateMotion = {
-    initial: reduced ? false : { opacity: 0, transform: 'translateY(3px)' },
-    animate: { opacity: 1, transform: 'translateY(0)' },
-    exit: reduced
-      ? { opacity: 1, transform: 'translateY(0)' }
-      : { opacity: 0, transform: 'translateY(-2px)' },
-    transition: transition(motionDurations.fast, reduced),
-  } as const;
+  const stateMotionProps = stateMotion(reduced, motionDurations.fast);
+  const dropOverlayMotion = panelRevealMotion(reduced, motionDurations.fast);
 
   const renderWorkspaceRow = (item: RecentWorkspaceDetail, index: number, missing = false) => {
     const Icon = workspaceIcon(item.kind, item.hasManifest);
@@ -952,17 +945,14 @@ export function HomeModuleHub(): React.JSX.Element {
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <AnimatePresence>
+      <AnimatePresence mode="wait" initial={false}>
         {isDragging ? (
           <m.div
             key="drop-overlay"
             className="launchpad-drop-overlay"
             role="status"
             aria-live="polite"
-            initial={reduced ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0 }}
-            transition={transition(motionDurations.fast, reduced)}
+            {...dropOverlayMotion}
           >
             <div className="launchpad-drop-overlay-inner">
               <FolderOpen aria-hidden="true" />
@@ -977,10 +967,6 @@ export function HomeModuleHub(): React.JSX.Element {
         <div className="launchpad-grid workbench-grid">
           {isFirstRun ? (
             <section className="launchpad-hero span-12" aria-labelledby="launchpad-first-run-title">
-              <div className="launchpad-brand">
-                <CortexMark size="large" />
-                <span className="launchpad-brand-name">Cortex ToolBox</span>
-              </div>
               <h1 id="launchpad-first-run-title" className="launchpad-hero-title">
                 Open your first workspace
               </h1>
@@ -1018,10 +1004,6 @@ export function HomeModuleHub(): React.JSX.Element {
                 className={`launchpad-hero ${continueWorkspace ? 'span-7' : 'span-12'}`}
                 aria-labelledby="launchpad-start-title"
               >
-                <div className="launchpad-brand">
-                  <CortexMark size="large" />
-                  <span className="launchpad-brand-name">Cortex ToolBox</span>
-                </div>
                 <h1 id="launchpad-start-title" className="launchpad-hero-title">
                   Start with a workspace
                 </h1>
@@ -1134,12 +1116,17 @@ export function HomeModuleHub(): React.JSX.Element {
 
                 <AnimatePresence mode="wait" initial={false}>
                   {recents.isPending ? (
-                    <m.p key="pending" className="launchpad-empty" role="status" {...stateMotion}>
+                    <m.p
+                      key="pending"
+                      className="launchpad-empty"
+                      role="status"
+                      {...stateMotionProps}
+                    >
                       <Clock3 aria-hidden="true" />
                       Loading recents…
                     </m.p>
                   ) : visibleRecents.length === 0 && visibleMissing.length === 0 ? (
-                    <m.p key="empty" className="launchpad-empty" {...stateMotion}>
+                    <m.p key="empty" className="launchpad-empty" {...stateMotionProps}>
                       Open a workspace to populate recents.
                     </m.p>
                   ) : (
@@ -1149,7 +1136,7 @@ export function HomeModuleHub(): React.JSX.Element {
                       role="listbox"
                       aria-label="Recent workspaces"
                       onKeyDown={onRecentListKeyDown}
-                      {...stateMotion}
+                      {...stateMotionProps}
                     >
                       {visibleRecents.map((item, index) => renderWorkspaceRow(item, index))}
                       {visibleMissing.map((item, offset) =>

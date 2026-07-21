@@ -5,12 +5,7 @@ import { modelSummarySchema, vehicleTimelineSchema } from '@cortex/model-inspect
 import { pluginManifestSchema, pluginPermissionSchema } from '@cortex/plugin-sdk';
 import { resourceAnalysisSchema } from '@cortex/script-analysis';
 import { defaultInstalledModuleIds, moduleIdSchema, normalizeInstalledModules } from './modules';
-import {
-  DEFAULT_WALLPAPER_BLEND,
-  storedPaletteSchema,
-  themeOverridesSchema,
-  wallpaperBlendSchema,
-} from './theme-schema';
+import { storedPaletteSchema, themeOverridesSchema } from './theme-schema';
 
 const errorSchema = z
   .object({
@@ -214,8 +209,6 @@ export const DEFAULT_PREFERENCES = {
   interfaceContrast: 'balanced',
   interfaceContrastFine: 0,
   protectTextContrast: true,
-  wallpaperBlendLight: { ...DEFAULT_WALLPAPER_BLEND },
-  wallpaperBlendDark: { ...DEFAULT_WALLPAPER_BLEND },
   themeOverrides: null,
   customPalettes: [] as import('./theme-schema').StoredPalette[],
   sidebarDensity: 'comfortable',
@@ -253,8 +246,6 @@ export interface Preferences {
   interfaceContrast: 'soft' | 'balanced' | 'crisp' | 'maximum';
   interfaceContrastFine: number;
   protectTextContrast: boolean;
-  wallpaperBlendLight: import('./theme-schema').WallpaperBlendSettings;
-  wallpaperBlendDark: import('./theme-schema').WallpaperBlendSettings;
   themeOverrides: import('./theme-schema').ThemeOverrides | null;
   customPalettes: import('./theme-schema').StoredPalette[];
   sidebarDensity: 'compact' | 'comfortable';
@@ -294,8 +285,6 @@ export const preferenceSchema = z.object({
   interfaceContrast: z.enum(['soft', 'balanced', 'crisp', 'maximum']),
   interfaceContrastFine: z.number().min(-20).max(20),
   protectTextContrast: z.boolean(),
-  wallpaperBlendLight: wallpaperBlendSchema,
-  wallpaperBlendDark: wallpaperBlendSchema,
   themeOverrides: themeOverridesSchema.nullable(),
   customPalettes: z.array(storedPaletteSchema).max(48),
   sidebarDensity: z.enum(['compact', 'comfortable']),
@@ -337,12 +326,6 @@ export function normalizePreferences(raw: unknown): Preferences {
   const protectTextContrast = preferenceSchema.shape.protectTextContrast.safeParse(
     source.protectTextContrast,
   );
-  const wallpaperBlendLight = preferenceSchema.shape.wallpaperBlendLight.safeParse(
-    source.wallpaperBlendLight,
-  );
-  const wallpaperBlendDark = preferenceSchema.shape.wallpaperBlendDark.safeParse(
-    source.wallpaperBlendDark,
-  );
   const themeOverrides = preferenceSchema.shape.themeOverrides.safeParse(source.themeOverrides);
   const customPalettes = preferenceSchema.shape.customPalettes.safeParse(source.customPalettes);
   const sidebarDensity = preferenceSchema.shape.sidebarDensity.safeParse(source.sidebarDensity);
@@ -380,12 +363,6 @@ export function normalizePreferences(raw: unknown): Preferences {
     protectTextContrast: protectTextContrast.success
       ? protectTextContrast.data
       : DEFAULT_PREFERENCES.protectTextContrast,
-    wallpaperBlendLight: wallpaperBlendLight.success
-      ? wallpaperBlendLight.data
-      : DEFAULT_PREFERENCES.wallpaperBlendLight,
-    wallpaperBlendDark: wallpaperBlendDark.success
-      ? wallpaperBlendDark.data
-      : DEFAULT_PREFERENCES.wallpaperBlendDark,
     themeOverrides: themeOverrides.success
       ? themeOverrides.data
       : DEFAULT_PREFERENCES.themeOverrides,
