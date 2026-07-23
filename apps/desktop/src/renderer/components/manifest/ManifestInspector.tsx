@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   CircleDashed,
   Copy,
-  ExternalLink,
   FileWarning,
   FolderOpen,
   Info,
@@ -78,8 +77,7 @@ export function ManifestInspector({
       if (pathFilter === 'scripts') {
         return entry.group === 'shared' || entry.group === 'client' || entry.group === 'server';
       }
-      if (pathFilter === 'files') return entry.group === 'files' || entry.group === 'data';
-      return true;
+      return entry.group === 'files' || entry.group === 'data';
     });
   }, [pathFilter, paths]);
 
@@ -96,7 +94,7 @@ export function ManifestInspector({
       else if (entry.group === 'client') groups[1]?.entries.push(entry);
       else if (entry.group === 'server') groups[2]?.entries.push(entry);
       else if (entry.group === 'files' || entry.group === 'data') groups[3]?.entries.push(entry);
-      else if (entry.group === 'dependencies') groups[4]?.entries.push(entry);
+      else groups[4]?.entries.push(entry);
     }
     return groups.filter((group) => group.entries.length > 0);
   }, [filteredPaths]);

@@ -6,7 +6,6 @@ import {
   FileCode2,
   GitCompareArrows,
   Network,
-  ImageDown,
   Radar,
   Siren,
   TriangleAlert,
@@ -25,7 +24,6 @@ const LOADERS: Record<ModuleId, () => Promise<{ default: React.ComponentType }>>
   align: () => import('./align'),
   pulse: () => import('./pulse'),
   chevron: () => import('./chevron'),
-  textures: () => import('./textures'),
   extensions: () => import('./extensions'),
 };
 
@@ -39,7 +37,6 @@ export const MODULE_ICONS: Record<ModuleId, LucideIcon> = {
   align: GitCompareArrows,
   pulse: Siren,
   chevron: TriangleAlert,
-  textures: ImageDown,
   extensions: Blocks,
 };
 

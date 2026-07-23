@@ -54,7 +54,10 @@ export function ParameterField({
             step={field.step}
             value={value}
             aria-describedby={`${inputId}-desc`}
-            onChange={(event) => setClamped(Number(event.target.value))}
+            onChange={(event) => {
+              const next = event.currentTarget.valueAsNumber;
+              if (Number.isFinite(next)) setClamped(next);
+            }}
             onKeyDown={(event) => {
               if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
                 event.preventDefault();
@@ -70,9 +73,11 @@ export function ParameterField({
             title={native}
             aria-label={`Copy native call for ${field.label}`}
             onClick={() =>
-              void copyText(native).then((copied) =>
-                copied ? toast.success('Native call copied.') : toast.error('Could not copy.'),
-              )
+              void copyText(native)
+                .then((copied) =>
+                  copied ? toast.success('Native call copied.') : toast.error('Could not copy.'),
+                )
+                .catch(() => toast.error('Could not copy.'))
             }
           >
             <Clipboard aria-hidden="true" />

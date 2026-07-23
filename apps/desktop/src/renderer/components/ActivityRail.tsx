@@ -94,14 +94,20 @@ export function ActivityRail(): React.JSX.Element {
   });
   const jobCount = jobs.data?.length ?? 0;
   const updates = useUpdateStatus();
-  const updateAvailable = updates.data?.phase === 'available';
+  const updateActionable = updates.data?.phase === 'available' || updates.data?.phase === 'ready';
+  const updateReady = updates.data?.phase === 'ready';
 
-  const downloadUpdate = async () => {
+  const runUpdateAction = async () => {
     try {
-      unwrap(await window.cortex.updates.download());
+      if (updateReady) {
+        unwrap(await window.cortex.updates.install());
+        toast.success('Installer opened. Finish setup there, then relaunch Cortex.');
+      } else {
+        unwrap(await window.cortex.updates.download());
+      }
       await updates.refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not download the update.');
+      toast.error(error instanceof Error ? error.message : 'Could not continue the update.');
     }
   };
 
@@ -208,27 +214,35 @@ export function ActivityRail(): React.JSX.Element {
               <Settings aria-hidden="true" />
             </m.button>
           </Tooltip>
-          {updateAvailable ? (
+          {updateActionable ? (
             <Tooltip
               content={
                 updates.data?.availableVersion
-                  ? `Download version ${updates.data.availableVersion}`
-                  : 'Download update'
+                  ? `${updateReady ? 'Install' : 'Download'} version ${updates.data.availableVersion}`
+                  : updateReady
+                    ? 'Install update'
+                    : 'Download update'
               }
               side={sidebarCollapsed ? 'right' : 'top'}
             >
               <m.button
                 type="button"
                 className="sidebar-utility-icon sidebar-update-icon"
-                onClick={() => void downloadUpdate()}
+                onClick={() => void runUpdateAction()}
                 aria-label={
                   updates.data?.availableVersion
-                    ? `Download version ${updates.data.availableVersion}`
-                    : 'Download update'
+                    ? `${updateReady ? 'Install' : 'Download'} version ${updates.data.availableVersion}`
+                    : updateReady
+                      ? 'Install update'
+                      : 'Download update'
                 }
                 {...iconInteraction(reduced)}
               >
-                <Download aria-hidden="true" />
+                {updateReady ? (
+                  <PackageCheck aria-hidden="true" />
+                ) : (
+                  <Download aria-hidden="true" />
+                )}
               </m.button>
             </Tooltip>
           ) : null}

@@ -352,6 +352,7 @@ export function App(): React.JSX.Element {
                 void window.cortex.projects
                   .open()
                   .then((result) => result.ok && result.data && setWorkspace(result.data))
+                  .catch(() => toast.error('Could not open the workspace picker.'))
               }
             >
               <FolderOpen aria-hidden="true" />

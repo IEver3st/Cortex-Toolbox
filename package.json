@@ -1,9 +1,17 @@
 {
   "name": "cortex",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Cortex ToolBox — Free tools for people who make things.",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IEver3st/CRT.git"
+  },
+  "homepage": "https://github.com/IEver3st/CRT",
+  "bugs": {
+    "url": "https://github.com/IEver3st/CRT/issues"
+  },
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=24 <25",

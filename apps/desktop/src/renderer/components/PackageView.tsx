@@ -48,7 +48,7 @@ export function PackageView(): React.JSX.Element {
       fileCount: preview.data.entries.length,
     });
     const name = workspace.project?.name ?? workspace.root.split(/[\\/]/).at(-1) ?? workspace.root;
-    const blocked = preview.data.gate.allowed !== true;
+    const blocked = !preview.data.gate.allowed;
     recordActivity({
       tool: 'bundle',
       workspaceRoot: workspace.root,

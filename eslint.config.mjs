@@ -37,4 +37,23 @@ export default defineConfig(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    files: [
+      'packages/script-analysis/src/probe-findings.ts',
+      'packages/vehicle-meta/src/**/*.ts',
+    ],
+    rules: {
+      // These parsers bounds-check captures and indexed tables before access. TypeScript cannot
+      // preserve those control-flow guarantees through the parser helpers and nested loops.
+      '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
+  {
+    files: ['packages/vehicle-meta/src/analysis.ts', 'packages/vehicle-meta/src/diagnose.ts'],
+    rules: {
+      // Input-facing parsers deliberately retain fallbacks for malformed or partial metadata,
+      // even where normalized public types make those branches look redundant to ESLint.
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+    },
+  },
 );

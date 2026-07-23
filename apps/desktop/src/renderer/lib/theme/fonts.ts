@@ -6,7 +6,7 @@ export interface FontOption {
   bundled: boolean;
 }
 
-export const INTERFACE_FONTS: FontOption[] = [
+export const INTERFACE_FONTS = [
   {
     id: 'aptos',
     label: 'Aptos',
@@ -35,9 +35,9 @@ export const INTERFACE_FONTS: FontOption[] = [
     kind: 'interface',
     bundled: false,
   },
-];
+] as const satisfies readonly FontOption[];
 
-export const CODE_FONTS: FontOption[] = [
+export const CODE_FONTS = [
   {
     id: 'cascadia-code',
     label: 'Cascadia Code',
@@ -66,20 +66,20 @@ export const CODE_FONTS: FontOption[] = [
     kind: 'code',
     bundled: false,
   },
-];
+] as const satisfies readonly FontOption[];
 
-const FONT_BY_ID = new Map(
+const FONT_BY_ID: ReadonlyMap<string, FontOption> = new Map(
   [...INTERFACE_FONTS, ...CODE_FONTS].map((font) => [font.id, font] as const),
 );
 
 export function resolveInterfaceFont(id: string): FontOption {
-  return FONT_BY_ID.get(id) ?? INTERFACE_FONTS[0]!;
+  return FONT_BY_ID.get(id) ?? INTERFACE_FONTS[0];
 }
 
 export function resolveCodeFont(id: string): FontOption {
   const font = FONT_BY_ID.get(id);
   if (font?.kind === 'code' || font?.kind === 'both') return font;
-  return CODE_FONTS[0]!;
+  return CODE_FONTS[0];
 }
 
 export function isAllowedFontId(id: string, kind: 'interface' | 'code'): boolean {

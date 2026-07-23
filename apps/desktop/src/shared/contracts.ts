@@ -1,11 +1,14 @@
 import { projectSchema, projectTypeSchema } from '@cortex/project-schema';
 import { z } from 'zod';
-import { imageAssetSchema, imageOperationPlanSchema } from '@cortex/image-pipeline';
-import { modelSummarySchema, vehicleTimelineSchema } from '@cortex/model-inspection';
 import { pluginManifestSchema, pluginPermissionSchema } from '@cortex/plugin-sdk';
 import { resourceAnalysisSchema } from '@cortex/script-analysis';
 import { defaultInstalledModuleIds, moduleIdSchema, normalizeInstalledModules } from './modules';
-import { storedPaletteSchema, themeOverridesSchema } from './theme-schema';
+import {
+  storedPaletteSchema,
+  themeOverridesSchema,
+  type StoredPalette,
+  type ThemeOverrides,
+} from './theme-schema';
 
 const errorSchema = z
   .object({
@@ -110,10 +113,6 @@ export const channels = {
   workspaceSummary: 'workspace:summary',
   analysisRun: 'analysis:run',
   analysisExport: 'analysis:export',
-  assetsInventory: 'assets:inventory',
-  texturesProcess: 'textures:process',
-  texturesPreview: 'textures:preview',
-  texturesExtractYtd: 'textures:extract-ytd',
   workbenchExport: 'workbench:export',
   pluginsList: 'plugins:list',
   pluginsGrant: 'plugins:grant',
@@ -155,6 +154,9 @@ export const updateStatusSchema = z.object({
 });
 
 export type UpdateStatus = z.infer<typeof updateStatusSchema>;
+
+export const reportTypeSchema = z.enum(['bug', 'feature', 'module']);
+export type ReportType = z.infer<typeof reportTypeSchema>;
 
 const empty = z.object({}).strict();
 const result = <T extends z.ZodType>(data: T) =>
@@ -210,13 +212,12 @@ export const DEFAULT_PREFERENCES = {
   interfaceContrastFine: 0,
   protectTextContrast: true,
   themeOverrides: null,
-  customPalettes: [] as import('./theme-schema').StoredPalette[],
+  customPalettes: [] as StoredPalette[],
   sidebarDensity: 'comfortable',
   sidebarCategoryLabels: true,
   experimentalTools: false,
   autoDownloadUpdates: true,
   releaseBranch: 'stable',
-  ytdToolPath: '',
   installedModules: defaultInstalledModuleIds(),
 } as const;
 
@@ -246,14 +247,13 @@ export interface Preferences {
   interfaceContrast: 'soft' | 'balanced' | 'crisp' | 'maximum';
   interfaceContrastFine: number;
   protectTextContrast: boolean;
-  themeOverrides: import('./theme-schema').ThemeOverrides | null;
-  customPalettes: import('./theme-schema').StoredPalette[];
+  themeOverrides: ThemeOverrides | null;
+  customPalettes: StoredPalette[];
   sidebarDensity: 'compact' | 'comfortable';
   sidebarCategoryLabels: boolean;
   experimentalTools: boolean;
   autoDownloadUpdates: boolean;
   releaseBranch: 'stable' | 'developer';
-  ytdToolPath: string;
   installedModules: ReturnType<typeof defaultInstalledModuleIds>;
 }
 
@@ -292,7 +292,6 @@ export const preferenceSchema = z.object({
   experimentalTools: z.boolean(),
   autoDownloadUpdates: z.boolean(),
   releaseBranch: z.enum(['stable', 'developer']),
-  ytdToolPath: z.string().max(4096),
   installedModules: z.array(moduleIdSchema),
 });
 
@@ -337,7 +336,6 @@ export function normalizePreferences(raw: unknown): Preferences {
     source.autoDownloadUpdates,
   );
   const releaseBranch = preferenceSchema.shape.releaseBranch.safeParse(source.releaseBranch);
-  const ytdToolPath = preferenceSchema.shape.ytdToolPath.safeParse(source.ytdToolPath);
   return {
     interfaceScale: scale.success ? scale.data : DEFAULT_PREFERENCES.interfaceScale,
     uiFontSize: uiFontSize.success ? uiFontSize.data : DEFAULT_PREFERENCES.uiFontSize,
@@ -382,7 +380,6 @@ export function normalizePreferences(raw: unknown): Preferences {
       ? autoDownloadUpdates.data
       : DEFAULT_PREFERENCES.autoDownloadUpdates,
     releaseBranch: releaseBranch.success ? releaseBranch.data : DEFAULT_PREFERENCES.releaseBranch,
-    ytdToolPath: ytdToolPath.success ? ytdToolPath.data : DEFAULT_PREFERENCES.ytdToolPath,
     installedModules: normalizeInstalledModules(source.installedModules),
   };
 }
@@ -480,11 +477,6 @@ export const workspaceSummarySchema = z.object({
     changed: z.array(z.object({ path: z.string(), status: z.string() })),
   }),
   indexedAt: z.string(),
-});
-export const assetInventorySchema = z.object({
-  images: z.array(imageAssetSchema),
-  models: z.array(modelSummarySchema),
-  timelines: z.array(vehicleTimelineSchema),
 });
 export const pluginStateSchema = z.object({
   manifest: pluginManifestSchema,
@@ -593,38 +585,6 @@ export const ipcDefinitions = {
     request: z.object({ analysis: resourceAnalysisSchema }).strict(),
     response: result(z.string().nullable()),
   },
-  [channels.assetsInventory]: { request: empty, response: result(assetInventorySchema) },
-  [channels.texturesProcess]: {
-    request: imageOperationPlanSchema,
-    response: result(z.object({ relativePath: z.string(), bytes: z.number().int().nonnegative() })),
-  },
-  [channels.texturesPreview]: {
-    request: z.object({ input: z.string().min(1).max(4096) }).strict(),
-    response: result(
-      z.object({
-        dataUrl: z.string(),
-        width: z.number().int().positive(),
-        height: z.number().int().positive(),
-      }),
-    ),
-  },
-  [channels.texturesExtractYtd]: {
-    request: z
-      .object({
-        input: z
-          .string()
-          .min(1)
-          .max(4096)
-          .regex(/\.ytd$/i),
-        output: z
-          .string()
-          .min(1)
-          .max(4096)
-          .regex(/\.zip$/i),
-      })
-      .strict(),
-    response: result(z.object({ relativePath: z.string(), bytes: z.number().int().nonnegative() })),
-  },
   [channels.workbenchExport]: {
     request: z
       .object({
@@ -672,6 +632,7 @@ export const ipcDefinitions = {
   [channels.reportsSubmit]: {
     request: z
       .object({
+        reportType: reportTypeSchema,
         title: z.string().trim().min(4).max(120),
         description: z.string().trim().min(10).max(8_000),
         steps: z.string().trim().max(8_000),
@@ -734,12 +695,6 @@ export interface CortexApi {
     summary(): Promise<IpcResponse<'workspace:summary'>>;
     analyze(): Promise<IpcResponse<'analysis:run'>>;
     exportAnalysis(input: IpcRequest<'analysis:export'>): Promise<IpcResponse<'analysis:export'>>;
-    assets(): Promise<IpcResponse<'assets:inventory'>>;
-    processTexture(input: IpcRequest<'textures:process'>): Promise<IpcResponse<'textures:process'>>;
-    previewTexture(input: IpcRequest<'textures:preview'>): Promise<IpcResponse<'textures:preview'>>;
-    extractYtd(
-      input: IpcRequest<'textures:extract-ytd'>,
-    ): Promise<IpcResponse<'textures:extract-ytd'>>;
     exportWorkbench(
       input: IpcRequest<'workbench:export'>,
     ): Promise<IpcResponse<'workbench:export'>>;

@@ -35,6 +35,9 @@ jobs:
       - name: Package installers
         env:
           CORTEX_RELEASE_CHANNEL: ${{ steps.channel.outputs.name }}
+          CORTEX_GITHUB_OWNER: IEver3st
+          CORTEX_GITHUB_REPOSITORY: CRT
+          CORTEX_ENABLE_AUTO_UPDATE: 'true'
         run: |
           if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then
             pnpm make:beta

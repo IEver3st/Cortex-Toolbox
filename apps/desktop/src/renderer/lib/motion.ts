@@ -80,27 +80,10 @@ export const dialogPop = {
   exit: { opacity: 0, scale: 0.992, y: -2 },
 } as const;
 
-type CompositorMotion = {
+interface CompositorMotion {
   initial: false | { opacity: number; transform: string };
   animate: { opacity: number; transform: string; transition?: Transition };
   exit: { opacity: number; transform: string; transition?: Transition };
-};
-
-function fadeMotion(reduced: boolean, duration: number): CompositorMotion {
-  if (reduced) {
-    return {
-      initial: false,
-      animate: { opacity: 1, transform: 'none' },
-      exit: { opacity: 1, transform: 'none' },
-    };
-  }
-
-  const exitDuration = Math.max(motionDurations.direct, duration * 0.65);
-  return {
-    initial: { opacity: 0, transform: 'none' },
-    animate: { opacity: 1, transform: 'none', transition: { duration, ease: easeOut } },
-    exit: { opacity: 0, transform: 'none', transition: { duration: exitDuration, ease: easeOut } },
-  };
 }
 
 function compositorMotion(

@@ -12,7 +12,7 @@ body:
         - label: This is not a vulnerability report (security issues use the private advisory form).
           required: true
   - type: input
-    attributes: { label: Cortex version, placeholder: 0.1.0 }
+    attributes: { label: Cortex version, placeholder: 1.0.0 }
     validations: { required: true }
   - type: dropdown
     attributes: { label: Operating system, options: [Windows, macOS, Linux] }

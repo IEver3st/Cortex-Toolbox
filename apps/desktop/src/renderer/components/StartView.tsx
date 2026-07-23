@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { listActivities, type ActivityEntry, type ActivityTool } from '../lib/activity-history';
 import { copyText } from '../lib/clipboard';
@@ -681,11 +681,8 @@ const ACTIVITY_TOOL_META: Record<
 
 function formatActivityDisplay(entry: ActivityEntry): { action: string; result: string } {
   const meta = ACTIVITY_TOOL_META[entry.tool];
-  if (!meta) {
-    return { action: 'Workspace activity', result: entry.summary };
-  }
   if (entry.tool === 'wire') {
-    const match = entry.summary.match(/(\d+) events.*?(\d+) exports.*?(\d+) commands/);
+    const match = /(\d+) events.*?(\d+) exports.*?(\d+) commands/.exec(entry.summary);
     if (match) {
       return {
         action: 'Wire mapped',
@@ -695,7 +692,7 @@ function formatActivityDisplay(entry: ActivityEntry): { action: string; result: 
   }
   if (entry.tool === 'sentinel') {
     if (entry.status === 'warning') {
-      const warnMatch = entry.summary.match(/(\d+) warning/);
+      const warnMatch = /(\d+) warning/.exec(entry.summary);
       const count = warnMatch?.[1] ?? entry.summary;
       return {
         action: 'Sentinel completed',
@@ -777,7 +774,7 @@ function WorkspaceBriefPanel(): React.JSX.Element | null {
   useEffect(() => {
     if (!workspace) return;
     setScopeForced(readScopeForced(workspace.root));
-  }, [workspace?.root]);
+  }, [workspace]);
 
   const openFolder = async () => {
     try {
@@ -851,7 +848,7 @@ function WorkspaceBriefPanel(): React.JSX.Element | null {
     return listActivities()
       .filter((entry) => entry.workspaceRoot.replace(/[\\/]+$/, '').toLowerCase() === key)
       .slice(0, 3);
-  }, [workspace?.root]);
+  }, [workspace]);
 
   if (!workspace) return null;
 
@@ -967,7 +964,7 @@ function WorkspaceBriefPanel(): React.JSX.Element | null {
         : 'Ready';
 
   const reanalyzeWorkspace = async () => {
-    if (!workspace || reanalyzing) return;
+    if (reanalyzing) return;
     setReanalyzing(true);
     try {
       await queryClient.invalidateQueries({ queryKey: ['summary', workspace.root] });
@@ -1112,7 +1109,9 @@ function WorkspaceBriefPanel(): React.JSX.Element | null {
                     <button
                       type="button"
                       className={`brief-stepper-action${stage.emphasis === 'current' ? ' is-primary' : ''}`}
-                      onClick={() => go(stage.kind!, stage.tabLabel)}
+                      onClick={() => {
+                        if (stage.kind) go(stage.kind, stage.tabLabel);
+                      }}
                     >
                       {stage.action}
                       {stage.emphasis === 'current' ? <ArrowRight aria-hidden="true" /> : null}
@@ -1149,7 +1148,7 @@ function WorkspaceBriefPanel(): React.JSX.Element | null {
           </div>
         </section>
 
-        {scopeBlocked && detection ? (
+        {scopeBlocked ? (
           <AnimatePresence mode="wait" initial={false}>
             <m.section
               key="brief-scope"
@@ -1554,7 +1553,7 @@ function WorkspaceBriefPanel(): React.JSX.Element | null {
             ) : (
               recentActivity.map((entry) => {
                 const meta = ACTIVITY_TOOL_META[entry.tool];
-                const Icon = meta?.icon ?? FolderOpen;
+                const Icon = meta.icon;
                 const display = formatActivityDisplay(entry);
                 return (
                   <li key={entry.id}>
@@ -1610,20 +1609,16 @@ function resolveFolderDirection(prev: string | null, root: string | null): Folde
 export function StartView(): React.JSX.Element {
   const workspace = useWorkspaceStore((state) => state.workspace);
   const root = workspace?.root ?? null;
-  const prevRootRef = useRef(root);
-  const directionRef = useRef<FolderNavDirection>('enter');
+  const [previousRoot, setPreviousRoot] = useState(root);
+  const direction = resolveFolderDirection(previousRoot, root);
 
-  const prev = prevRootRef.current;
-  if (prev !== root) {
-    directionRef.current = resolveFolderDirection(prev, root);
-    prevRootRef.current = root;
-  }
+  useEffect(() => setPreviousRoot(root), [root]);
 
   return (
     <SectionPageHost
       pageKey={root ?? 'launchpad'}
       variant="folder"
-      direction={directionRef.current}
+      direction={direction}
       className="start-view-host"
     >
       {workspace ? <WorkspaceBriefPanel /> : <HomeModuleHub />}

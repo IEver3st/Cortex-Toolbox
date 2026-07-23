@@ -101,12 +101,6 @@ importers:
       '@cortex/format-adapters':
         specifier: workspace:*
         version: link:../../packages/format-adapters
-      '@cortex/image-pipeline':
-        specifier: workspace:*
-        version: link:../../packages/image-pipeline
-      '@cortex/model-inspection':
-        specifier: workspace:*
-        version: link:../../packages/model-inspection
       '@cortex/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
@@ -234,18 +228,6 @@ importers:
         version: 4.1.4
 
   packages/format-adapters:
-    dependencies:
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-
-  packages/image-pipeline:
-    dependencies:
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-
-  packages/model-inspection:
     dependencies:
       zod:
         specifier: 4.4.3

@@ -16,12 +16,11 @@ export function PresetControls({
   ][];
 
   return (
-    <div className="chassis-preset-bar" role="list" aria-label="Handling intent presets">
+    <div className="chassis-preset-bar" role="group" aria-label="Handling intent presets">
       {entries.map(([id, option]) => (
         <button
           key={id}
           type="button"
-          role="listitem"
           className={
             activePreset === id || (activePreset === 'custom' && presetBase === id)
               ? 'is-active'

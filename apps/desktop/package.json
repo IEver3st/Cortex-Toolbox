@@ -1,7 +1,7 @@
 {
   "name": "@cortex/desktop",
   "productName": "Cortex ToolBox",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "main": ".vite/build/main.cjs",
@@ -28,8 +28,6 @@
     "@codemirror/view": "6.43.6",
     "@cortex/core": "workspace:*",
     "@cortex/format-adapters": "workspace:*",
-    "@cortex/image-pipeline": "workspace:*",
-    "@cortex/model-inspection": "workspace:*",
     "@cortex/plugin-sdk": "workspace:*",
     "@cortex/project-schema": "workspace:*",
     "@cortex/resource-parser": "workspace:*",

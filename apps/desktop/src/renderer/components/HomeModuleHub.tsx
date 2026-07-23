@@ -156,14 +156,14 @@ function resolveWorkspaceState(item: RecentWorkspaceDetail): WorkspaceState {
     return { label: 'Mixed scope', tone: 'info' };
   }
   if (validation?.status === 'error') {
-    const match = validation.summary.match(/(\d+)\s+error/i);
+    const match = /(\d+)\s+error/i.exec(validation.summary);
     return {
       label: match ? `${match[1]} error${match[1] === '1' ? '' : 's'}` : 'Blocking issues',
       tone: 'error',
     };
   }
   if (validation?.status === 'warning') {
-    const match = validation.summary.match(/(\d+)\s+warning/i);
+    const match = /(\d+)\s+warning/i.exec(validation.summary);
     return {
       label: match ? `${match[1]} warning${match[1] === '1' ? '' : 's'}` : validation.summary,
       tone: 'warning',
@@ -499,7 +499,7 @@ function workspaceMenuItems(
       icon: Trash2,
       danger: true,
       separator: true,
-      onSelect: () => void removeRecent(item.root),
+      onSelect: () => removeRecent(item.root),
     },
   ];
 }
@@ -661,8 +661,8 @@ export function HomeModuleHub(): React.JSX.Element {
     [activities],
   );
 
-  const existingRecents = recentList.filter((entry) => entry.exists);
-  const missingRecents = recentList.filter((entry) => !entry.exists);
+  const existingRecents = useMemo(() => recentList.filter((entry) => entry.exists), [recentList]);
+  const missingRecents = useMemo(() => recentList.filter((entry) => !entry.exists), [recentList]);
   const isFirstRun = recentList.length === 0 && visibleActivities.length === 0;
 
   const continueWorkspace = existingRecents[0] ?? null;
@@ -670,17 +670,10 @@ export function HomeModuleHub(): React.JSX.Element {
     ? latestActivityForWorkspace(continueWorkspace.root)
     : null;
 
-  const contextual = useMemo(
-    () =>
-      isFirstRun || !continueWorkspace
-        ? null
-        : resolveContextualRecommendation(
-            recentList,
-            (root) => void openWorkspace(root),
-            openModule,
-          ),
-    [continueWorkspace, isFirstRun, openModule, openWorkspace, recentList],
-  );
+  const contextual =
+    isFirstRun || !continueWorkspace
+      ? null
+      : resolveContextualRecommendation(recentList, (root) => void openWorkspace(root), openModule);
 
   const showContextual =
     contextual &&
@@ -717,19 +710,19 @@ export function HomeModuleHub(): React.JSX.Element {
   const isDragging = dragDepth > 0;
 
   const onDragEnter = (event: DragEvent) => {
-    if (!event.dataTransfer?.types.includes('Files')) return;
+    if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     setDragDepth((value) => value + 1);
   };
 
   const onDragLeave = (event: DragEvent) => {
-    if (!event.dataTransfer?.types.includes('Files')) return;
+    if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     setDragDepth((value) => Math.max(0, value - 1));
   };
 
   const onDragOver = (event: DragEvent) => {
-    if (!event.dataTransfer?.types.includes('Files')) return;
+    if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
   };
@@ -737,7 +730,7 @@ export function HomeModuleHub(): React.JSX.Element {
   const onDrop = (event: DragEvent) => {
     event.preventDefault();
     setDragDepth(0);
-    const file = event.dataTransfer?.files[0];
+    const file = event.dataTransfer.files[0];
     const filePath = file ? (file as File & { path?: string }).path : undefined;
     if (!filePath) {
       toast.error('Drop a folder from your file system.');
@@ -1069,7 +1062,7 @@ export function HomeModuleHub(): React.JSX.Element {
                     >
                       Resume workspace
                     </button>
-                    {showContextual && contextual ? (
+                    {showContextual ? (
                       <button
                         type="button"
                         className="launchpad-contextual-link"

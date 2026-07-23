@@ -1,4 +1,5 @@
 import type { MainEnv } from './config/env';
+import type { ReportType } from '../shared/contracts';
 
 export interface DiagnosticLogEntry {
   at: string;
@@ -6,12 +7,27 @@ export interface DiagnosticLogEntry {
   message: string;
 }
 
+export type { ReportType } from '../shared/contracts';
+
 export interface BugReportInput {
+  reportType: ReportType;
   title: string;
   description: string;
   steps: string;
   includeDiagnostics: boolean;
 }
+
+const REPORT_TYPE_LABELS: Record<ReportType, string> = {
+  bug: 'Bug',
+  feature: 'Feature',
+  module: 'Module',
+};
+
+const REPORT_TYPE_ISSUE_LABELS: Record<ReportType, string> = {
+  bug: 'bug',
+  feature: 'enhancement',
+  module: 'module-request',
+};
 
 export interface ReportContext {
   appVersion: string;
@@ -59,16 +75,25 @@ function truncate(value: string, maximum: number): string {
   return value.length <= maximum ? value : `${value.slice(0, maximum - 22)}\n[truncated by Cortex]`;
 }
 
+function reportDetailSections(input: BugReportInput): string[] {
+  const description = cleanText(input.description, 8_000);
+  const steps = cleanText(input.steps, 8_000);
+  if (input.reportType === 'feature') {
+    return ['## Description', description, '## Use case', steps || 'Not provided.'];
+  }
+  if (input.reportType === 'module') {
+    return ['## Description', description, '## Module details', steps || 'Not provided.'];
+  }
+  return ['## What happened', description, '## Steps to reproduce', steps || 'Not provided.'];
+}
+
 export function formatBugReportBody(
   input: BugReportInput,
   context: ReportContext,
   logs: DiagnosticLogEntry[],
 ): string {
   const sections = [
-    '## What happened',
-    input.description,
-    '## Steps to reproduce',
-    input.steps || 'Not provided.',
+    ...reportDetailSections(input),
     '## Environment',
     [
       `- Cortex: ${context.appVersion} (${context.releaseChannel})`,
@@ -157,9 +182,14 @@ export class GitHubBugReportService {
         'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({
-        title: `[Bug] ${input.title}`,
+        title: `[${REPORT_TYPE_LABELS[input.reportType]}] ${cleanText(input.title, 120)}`,
         body: formatBugReportBody(input, this.context(), this.diagnostics.list()),
-        labels: parseLabels(this.env.CORTEX_GITHUB_REPORT_LABELS),
+        labels: [
+          ...new Set([
+            ...parseLabels(this.env.CORTEX_GITHUB_REPORT_LABELS),
+            REPORT_TYPE_ISSUE_LABELS[input.reportType],
+          ]),
+        ],
       }),
       signal: AbortSignal.timeout(15_000),
     });

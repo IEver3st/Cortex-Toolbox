@@ -22,12 +22,11 @@ describe('module catalog', () => {
     expect(normalizeInstalledModules(['index', 'index', 'bundle'])).toEqual(['index', 'bundle']);
   });
 
-  it('migrates legacy workflow modules and preserves the promoted texture tool', () => {
-    expect(normalizeInstalledModules(['analysis', 'package', 'textures', 'vehicles'])).toEqual([
+  it('migrates legacy workflow modules', () => {
+    expect(normalizeInstalledModules(['analysis', 'package', 'vehicles'])).toEqual([
       'probe',
       'wire',
       'bundle',
-      'textures',
       'chassis',
       'align',
       'pulse',

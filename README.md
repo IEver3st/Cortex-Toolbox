@@ -34,8 +34,7 @@ Cortex gives FiveM and GTA V asset authors a single, keyboard-friendly desktop s
 - Generate, validate, merge, and repair linked `vehicles.meta`, `handling.meta`, `carcols.meta`, `carvariations.meta`, and `vehiclelayouts.meta` files.
 - Design 24-channel, 32-step siren patterns with live playback and `carcols` export.
 - Build mirrored emergency/fleet chevron panels with exact geometry and PNG export.
-- Convert PNG/JPEG/WebP/DDS textures and optionally extract YTD archives through a configured external tool.
-- Extend capabilities with third-party plugins via the Extensions module and a permissioned plugin SDK.
+- Inspect third-party plugin manifests and requested permissions in an experimental Extensions preview. Extension code does not run in Cortex 1.0.
 
 Everything is driven from a compact, typography-first UI with a left-hand Activity Rail, tabbed workspace, command palette, and settings surface.
 
@@ -132,25 +131,17 @@ Build mirrored emergency, highway, and fleet warning panels with exact geometry 
 - Configurable angle, stripe width, colors, finish type, reflective settings, and overlay text.
 - Day, headlamp, and mask preview modes; PNG export.
 
-#### Texture Converter
-
-Convert PNG, JPEG, WebP, and DDS textures locally, with optional YTD extraction through a configured tool.
-
-- Identifies image format from headers (PNG, DDS, TGA, PSD, YTD, etc.).
-- Resize, flip green channel, extract color channels, and apply chevron overlays.
-- Optional YTD extraction via an external executable configured in Settings.
-- Original files are never overwritten; outputs are written next to the source or to a chosen location.
-
 ### System extensions
 
 #### Extensions
 
-Install and manage third-party plugins that extend Cortex capabilities.
+Inspect workspace-scoped plugin manifests in an experimental preview.
 
 - Loads plugins from a dedicated folder.
 - Validates plugin manifests against a strict schema.
-- Enforces permission grants for workspace read/write, archive creation, external-tool execution, and HTTPS network access.
-- Extensions can contribute model loaders, texture converters, metadata schemas, package profiles, audit rules, and export targets.
+- Shows declared permissions and stores preview grants for future runtime support.
+- Does not execute extension code or expose workspace, archive, external-tool, or network capabilities to plugins in version 1.0.
+- Appears only after Experimental tools is enabled and the preview module is installed in Settings.
 
 ---
 
@@ -194,24 +185,28 @@ Cortex supports three release channels:
 - `beta` : separate app bundle ID, icon, and installer name
 - `development` : local builds; updates are disabled
 
-When configured with a GitHub owner and repository and enabled via `CORTEX_ENABLE_AUTO_UPDATE`, the app can check for new releases, download installers in the background, and notify you when an update is ready to install. Auto-update controls live in Settings > About. The Activity Rail shows a download icon when an update is ready.
+Windows packaged builds can check GitHub releases when enabled via `CORTEX_ENABLE_AUTO_UPDATE`. Cortex downloads the Squirrel installer, verifies it against the release's published SHA-256 checksum, and then offers to open it. Auto-update controls live in Settings > About, and the Activity Rail shows download or install actions as the update advances.
+
+In-app updates are disabled on macOS and Linux in version 1.0. Those platforms receive release artifacts but must install updates manually.
 
 ---
 
 ## Security, privacy, and diagnostics
 
-- **Local-first:** Resource parsing, script analysis, vehicle meta validation, and image conversion run locally. No cloud service is required to use the app.
+- **Local-first:** Resource parsing, script analysis, and vehicle meta validation run locally. No cloud service is required to use the app.
 - **Sandboxed renderer:** The Electron renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and a strict Content Security Policy.
-- **Permission model:** Third-party plugins must declare permissions and be explicitly granted before accessing workspace files, writing archives, launching external tools, or making network requests.
+- **Extensions preview:** Plugin manifests are validated and requested grants can be reviewed, but plugin code is not executed in version 1.0.
 - **Safe file writes:** All text edits are staged through a change plan with SHA-256 verification. Files are only modified after review.
-- **Diagnostics:** The main process captures log events and renderer errors locally. You can submit a bug report with diagnostics directly to a configured GitHub repository from Settings > Report a Problem. Logs are redacted for tokens, passwords, and secrets.
+- **Diagnostics:** The main process captures log events and renderer errors locally. A maintainer-configured build can submit reports to GitHub from Settings > Feedback. Tokens, passwords, and secrets are redacted from diagnostics and report text before submission. Public builds do not embed a reporting token and show the feature as unavailable unless one is supplied securely at runtime.
+
+See [SECURITY.md](SECURITY.md) for supported versions and how to report vulnerabilities privately.
 
 ---
 
 ## Architecture overview
 
 ```
-C:\Users\User\Desktop\CRT
+cortex/
 ├── apps/desktop          # Electron + React application
 │   ├── src/main          # Main process (IPC, services, file I/O)
 │   ├── src/renderer      # React UI, components, modules
@@ -223,10 +218,8 @@ C:\Users\User\Desktop\CRT
     ├── resource-parser   # Manifest parsing, file tree scanning, audit, packaging
     ├── script-analysis   # Lua/JS/TS symbol and reference extraction
     ├── vehicle-meta      # GTA V vehicle metadata schema, validation, repair, generation
-    ├── image-pipeline    # Texture conversion, DDS/PNG/JPEG/WebP/YTD handling
-    ├── model-inspection  # GLTF/GLB/YDR/YDD/YFT header inspection
     ├── format-adapters   # Capability registry for external and built-in converters
-    ├── plugin-sdk        # Plugin manifest and permission runtime
+    ├── plugin-sdk        # Plugin manifest and permission schemas
     └── ui                # Shared UI primitives (if any)
 ```
 
@@ -276,12 +269,14 @@ pnpm build
 pnpm package
 ```
 
-### Make distributables (installer/zip/dmg/AppImage)
+### Make distributables
 
 ```bash
 pnpm make        # stable
 pnpm make:beta   # beta
 ```
+
+The current makers produce Windows Squirrel setup/ZIP/NUPKG artifacts, a macOS ZIP, and Linux ZIP/DEB/RPM artifacts. DMG and AppImage packages are not produced in version 1.0.
 
 ### Quality commands
 
@@ -296,7 +291,11 @@ pnpm icons       # Regenerate application icons from source assets
 
 ### Environment overrides
 
-Copy `apps/desktop/.env.local` from `.env.example` to configure logging, release channel, GitHub update repository, diagnostics token, optional YTD tool path, and archive size limits. Do not commit secrets.
+Copy `apps/desktop/.env.example` to `apps/desktop/.env.local` to configure logging, release channel, the GitHub update repository, an optional report token, the optional YTD tool path, and archive size limits. `CORTEX_GITHUB_REPOSITORY` is the short repository name (`CRT`), not a GitHub URL. Never commit report tokens or bake them into public installers.
+
+### Releasing
+
+Tagged pushes (`v*`) trigger the [Release workflow](.github/workflows/release.yml), which runs tests, packages installers for Windows/macOS/Linux, generates checksums and SBOMs, and publishes a GitHub release. Beta tags should include `beta` in the tag name (for example `v0.2.0-beta.1`).
 
 ---
 

@@ -194,7 +194,6 @@ export function HandlingSection({
         onSelectChange={onSelectChange}
         onResetField={onResetField}
         onResetCategory={onCategoryReset}
-        categoryLabel={HANDLING_CATEGORY_LABELS[category]}
       />
     </div>
   );

@@ -6,7 +6,6 @@ import {
   countDynamicReferences,
   probeOverallState,
   type ProbeFinding,
-  type ResourceAnalysis,
 } from '@cortex/script-analysis';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Download, Eye, EyeOff, FolderOpen, Play } from 'lucide-react';
@@ -135,7 +134,7 @@ export default function Probe(): React.JSX.Element {
     queryFn: async ({ signal }) => {
       const result = await window.cortex.resources.analyze();
       if (signal.aborted) throw new Error('Scan cancelled.');
-      return unwrap(result) as ResourceAnalysis;
+      return unwrap(result);
     },
     enabled: false,
     retry: false,
@@ -344,7 +343,7 @@ export default function Probe(): React.JSX.Element {
     if (lastRecordedScan.current === analysis.dataUpdatedAt) return;
 
     const recordScan = async () => {
-      const paths = analysis.data!.files.map((file) => file.relativePath);
+      const paths = analysis.data.files.map((file) => file.relativePath);
       const loadedSources: Record<string, string> = {};
       await Promise.all(
         paths.map(async (relativePath) => {
@@ -355,7 +354,7 @@ export default function Probe(): React.JSX.Element {
       );
       setSources(loadedSources);
 
-      const scanFindings = buildProbeFindings(analysis.data!, { sources: loadedSources });
+      const scanFindings = buildProbeFindings(analysis.data, { sources: loadedSources });
       const scanCounts = countBySeverity(scanFindings);
       const ended = Date.now();
       const duration = scanStartedAt ? ended - scanStartedAt : 0;
@@ -368,15 +367,15 @@ export default function Probe(): React.JSX.Element {
         at: new Date(ended).toISOString(),
         durationMs: duration,
         state: probeOverallState(scanCounts, false),
-        scripts: analysis.data!.summary.scripts,
-        lines: analysis.data!.summary.lines,
+        scripts: analysis.data.summary.scripts,
+        lines: analysis.data.summary.lines,
         rulesExecuted: Object.keys(PROBE_RULE_META).length,
         ruleSetVersion: PROBE_RULE_SET_VERSION,
         highCount: scanCounts.high,
         mediumCount: scanCounts.medium,
         lowCount: scanCounts.low,
         infoCount: scanCounts.info,
-        dynamicReferences: countDynamicReferences(analysis.data!),
+        dynamicReferences: countDynamicReferences(analysis.data),
         skippedFiles: 0,
         fingerprints: scanFindings.map((finding) => finding.id),
       });
@@ -384,11 +383,11 @@ export default function Probe(): React.JSX.Element {
 
       setLastAnalysis({
         at: run.at,
-        scripts: analysis.data!.summary.scripts,
-        lines: analysis.data!.summary.lines,
-        events: analysis.data!.summary.events,
-        exports: analysis.data!.summary.exports,
-        commands: analysis.data!.summary.commands,
+        scripts: analysis.data.summary.scripts,
+        lines: analysis.data.summary.lines,
+        events: analysis.data.summary.events,
+        exports: analysis.data.summary.exports,
+        commands: analysis.data.summary.commands,
       });
 
       recordActivity({

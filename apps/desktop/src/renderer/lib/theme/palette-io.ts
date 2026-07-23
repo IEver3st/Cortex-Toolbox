@@ -3,7 +3,6 @@ import {
   THEME_SCHEMA_VERSION,
   type StoredPalette,
   type ThemeExport,
-  type TokenOverrides,
 } from '../../../shared/theme-schema';
 import { resolveThemeTokens } from './resolve';
 
@@ -117,7 +116,7 @@ export function diffPreferences(before: Preferences, after: Preferences): ThemeC
   const tokenMode = mode === 'dark' ? 'dark' : 'light';
   const beforeOverrides = before.themeOverrides?.[tokenMode] ?? {};
   const afterOverrides = after.themeOverrides?.[tokenMode] ?? {};
-  for (const key of Object.keys(afterOverrides) as (keyof TokenOverrides)[]) {
+  for (const key of Object.keys(afterOverrides)) {
     const from = beforeOverrides[key];
     const to = afterOverrides[key];
     if (from !== to && to) {

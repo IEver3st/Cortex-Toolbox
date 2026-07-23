@@ -36,7 +36,6 @@ function isActivityEntry(entry: unknown): entry is ActivityEntry {
     TOOL_IDS.has(candidate.tool) &&
     STATUS_IDS.has(candidate.status) &&
     typeof candidate.navigate === 'object' &&
-    candidate.navigate !== null &&
     typeof candidate.navigate.kind === 'string' &&
     typeof candidate.navigate.tabLabel === 'string'
   );

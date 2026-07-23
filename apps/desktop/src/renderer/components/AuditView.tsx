@@ -94,7 +94,7 @@ export function AuditView(): React.JSX.Element {
     queryFn: async ({ signal }) => {
       const result = await window.cortex.resources.audit();
       if (signal.aborted) throw new Error('Validation cancelled.');
-      return unwrap(result) as AuditFinding[];
+      return unwrap(result);
     },
     enabled: false,
     retry: false,
@@ -220,7 +220,8 @@ export function AuditView(): React.JSX.Element {
     if (selectedKey && sortedFindings.some((finding) => findingKey(finding) === selectedKey)) {
       return;
     }
-    setSelectedKey(findingKey(sortedFindings[0]!));
+    const firstFinding = sortedFindings[0];
+    if (firstFinding) setSelectedKey(findingKey(firstFinding));
   }, [phase, sortedFindings, selectedKey]);
 
   useEffect(() => {

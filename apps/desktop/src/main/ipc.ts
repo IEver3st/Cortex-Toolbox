@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { access, constants, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import {
   app,
@@ -50,10 +51,6 @@ import { UpdateService } from './update-service';
 import {
   analyzeWorkspace,
   discoverPlugins,
-  extractYtdToZip,
-  inventoryAssets,
-  processTexture,
-  previewTexture,
   workspaceSummary,
   writeJsonExport,
 } from './workspace-insights';
@@ -61,7 +58,18 @@ import { GitHubBugReportService, type DiagnosticsService } from './diagnostics-s
 
 const workspace = new WorkspaceService();
 const jobs = new JobQueue();
-const pendingPlans = new Map<string, { root: string; relativePath: string; source: string }>();
+interface PendingTextPlan {
+  root: string;
+  relativePath: string;
+  source: string;
+  beforeHash: string | null;
+  createdAt: number;
+}
+
+const pendingPlans = new Map<string, PendingTextPlan>();
+const MAX_PENDING_PLANS = 20;
+const PENDING_PLAN_TTL_MS = 10 * 60 * 1_000;
+const MAX_FILE_READ_BYTES = 10 * 1024 * 1024;
 const TEXT_EDIT_EXTENSIONS = new Set([
   '.lua',
   '.js',
@@ -91,14 +99,57 @@ function assertEditableTextPath(relativePath: string): void {
 async function applyPendingTextPlan(planId: string) {
   const pending = pendingPlans.get(planId);
   if (!pending) throw new Error('This change plan expired. Review the changes again.');
+  pendingPlans.delete(planId);
+  if (Date.now() - pending.createdAt > PENDING_PLAN_TTL_MS) {
+    throw new Error('This change plan expired. Review the changes again.');
+  }
   const active = workspace.require();
   if (active.root !== pending.root)
     throw new Error('The active workspace changed after this plan was created.');
+  const target = assertWithinRoot(
+    pending.root,
+    path.join(pending.root, normalizeRelative(pending.relativePath)),
+  );
+  let currentHash: string | null = null;
+  try {
+    currentHash = createHash('sha256')
+      .update(await readFile(target))
+      .digest('hex');
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+  }
+  if (currentHash !== pending.beforeHash) {
+    throw new Error('The file changed after this plan was reviewed. Review the latest file first.');
+  }
   const result = await safeWriteText(pending.root, pending.relativePath, pending.source);
-  pendingPlans.delete(planId);
   workspace.invalidateFiles();
   await workspace.open(active.root);
   return result;
+}
+
+function rememberPendingPlan(
+  plan: Awaited<ReturnType<typeof planTextWrite>>,
+  root: string,
+  relativePath: string,
+  source: string,
+): void {
+  const entry = plan.entries[0];
+  if (!entry) throw new Error('The change plan did not contain a file entry.');
+  for (const [id, pending] of pendingPlans) {
+    if (Date.now() - pending.createdAt > PENDING_PLAN_TTL_MS) pendingPlans.delete(id);
+  }
+  while (pendingPlans.size >= MAX_PENDING_PLANS) {
+    const oldest = pendingPlans.keys().next().value;
+    if (!oldest) break;
+    pendingPlans.delete(oldest);
+  }
+  pendingPlans.set(plan.id, {
+    root,
+    relativePath,
+    source,
+    beforeHash: entry.beforeHash,
+    createdAt: Date.now(),
+  });
 }
 
 const DEFAULT_PACKAGE_EXCLUDES = ['.cortex/**', '.cortex-write.lock', '*.zip', '*.sha256'] as const;
@@ -493,6 +544,11 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
         const active = workspace.require();
         const relativePath = normalizeRelative(request.relativePath);
         const target = assertWithinRoot(active.root, path.join(active.root, relativePath));
+        const info = await stat(target);
+        if (!info.isFile()) throw new Error('The selected path is not a file.');
+        if (info.size > MAX_FILE_READ_BYTES) {
+          throw new Error('This file is larger than the 10 MB in-app read limit.');
+        }
         const content = await readFile(target, 'utf8');
         return {
           content,
@@ -511,7 +567,7 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
         const target = assertWithinRoot(active.root, path.join(active.root, relativePath));
         await access(target, constants.F_OK);
         const plan = await planTextWrite(active.root, relativePath, request.source);
-        pendingPlans.set(plan.id, { root: active.root, relativePath, source: request.source });
+        rememberPendingPlan(plan, active.root, relativePath, request.source);
         return plan;
       }, 'CHANGE_PLAN_FAILED') as Promise<IpcResponse<'files:plan-write'>>,
   );
@@ -536,7 +592,7 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
         const active = workspace.require();
         const relativePath = active.manifestName ?? 'fxmanifest.lua';
         const plan = await planTextWrite(active.root, relativePath, request.source);
-        pendingPlans.set(plan.id, { root: active.root, relativePath, source: request.source });
+        rememberPendingPlan(plan, active.root, relativePath, request.source);
         return plan;
       }, 'CHANGE_PLAN_FAILED') as Promise<IpcResponse<'manifest:plan'>>,
   );
@@ -721,45 +777,6 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
       return fail(fromUnknown(error, 'ANALYSIS_EXPORT_FAILED'));
     }
   });
-  register(
-    channels.assetsInventory,
-    () =>
-      guarded(async () => {
-        const active = workspace.require();
-        return inventoryAssets(active.root, await workspace.files());
-      }, 'ASSET_INVENTORY_FAILED') as Promise<IpcResponse<'assets:inventory'>>,
-  );
-  register(
-    channels.texturesProcess,
-    (_event, request) =>
-      guarded(async () => {
-        const result = await processTexture(workspace.require().root, request);
-        workspace.invalidateFiles();
-        return result;
-      }, 'TEXTURE_PROCESS_FAILED') as Promise<IpcResponse<'textures:process'>>,
-  );
-  register(
-    channels.texturesPreview,
-    (_event, request) =>
-      guarded(
-        async () => previewTexture(workspace.require().root, request.input),
-        'TEXTURE_PREVIEW_FAILED',
-      ) as Promise<IpcResponse<'textures:preview'>>,
-  );
-  register(
-    channels.texturesExtractYtd,
-    (_event, request) =>
-      guarded(async () => {
-        const result = await extractYtdToZip(
-          workspace.require().root,
-          request.input,
-          request.output,
-          readPreferences().ytdToolPath,
-        );
-        workspace.invalidateFiles();
-        return result;
-      }, 'YTD_EXTRACT_FAILED') as Promise<IpcResponse<'textures:extract-ytd'>>,
-  );
   register(channels.workbenchExport, async (event, request) => {
     try {
       const owner = BrowserWindow.fromWebContents(event.sender);

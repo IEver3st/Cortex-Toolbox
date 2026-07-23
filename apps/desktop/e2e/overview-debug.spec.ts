@@ -42,9 +42,9 @@ test('overview survives activity history and renders sections', async () => {
   });
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'What are you working on?' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Continue working' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start with a workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recent workspaces' })).toBeVisible();
+  await expect(page.getByText('corrupt entry')).toBeHidden();
 
   if (errors.length) {
     throw new Error(`Page errors: ${errors.join(' | ')}`);

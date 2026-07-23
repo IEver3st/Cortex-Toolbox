@@ -1,5 +1,5 @@
 import type { SentinelReadiness } from '../../lib/sentinel-history';
-import type { AuditFinding, RuleMeta, Severity } from './constants';
+import type { AuditFinding, RuleMeta } from './constants';
 import { RULE_META } from './constants';
 
 export function ruleMeta(ruleId: string): RuleMeta {

@@ -46,7 +46,6 @@ async function main(): Promise<void> {
       ['Validate', 'validate'],
       ['Script Analysis', 'script-analysis'],
       ['Release', 'release'],
-      ['Textures', 'texture-studio'],
       ['Props', 'prop-workbench'],
       ['Clothing', 'clothing-workbench'],
       ['Weapons', 'weapon-workbench'],

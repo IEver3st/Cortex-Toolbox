@@ -13,7 +13,7 @@ import {
   Search,
   Terminal,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CodeEditor } from '../../components/CodeEditor';
 import { EmptyState, Toggle } from '../../components/UiPrimitives';
@@ -686,31 +686,13 @@ export default function Wire(): React.JSX.Element {
   const [editSession, setEditSession] = useState<EditSession | null>(null);
   const [writePlanId, setWritePlanId] = useState<string | null>(null);
   const [viewReset, setViewReset] = useState(0);
+  const viewStageRef = useRef<HTMLDivElement>(null);
   const paneHostRef = useRef<HTMLDivElement>(null);
-  const [, setLayoutEpoch] = useState(0);
-
   const analysis = useQuery({
     queryKey: ['wire-analysis', workspace?.root],
     queryFn: async () => unwrap(await window.cortex.resources.analyze()),
     enabled: Boolean(workspace),
   });
-
-  useLayoutEffect(() => {
-    const node = paneHostRef.current;
-    if (!node) return;
-
-    let lastHeight = 0;
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect.height ?? 0;
-      if (height > 0 && Math.abs(height - lastHeight) > 1) {
-        lastHeight = height;
-        setLayoutEpoch((value) => value + 1);
-      }
-    });
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [analysis.data, activeView]);
 
   useEffect(() => {
     setSelectedFile(null);
@@ -725,6 +707,24 @@ export default function Wire(): React.JSX.Element {
       setNodePositions({});
     }
   }, [workspace?.root]);
+
+  useLayoutEffect(() => {
+    const stage = viewStageRef.current;
+    const pane = paneHostRef.current;
+    if (!stage || !pane) return;
+
+    const syncLayout = () => {
+      const height = stage.clientHeight;
+      if (height <= 0) return;
+      pane.style.height = `${height}px`;
+      pane.style.minHeight = `${height}px`;
+    };
+
+    syncLayout();
+    const observer = new ResizeObserver(syncLayout);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [analysis.data, activeView]);
 
   useEffect(() => {
     if (!analysis.data) return;
@@ -1016,7 +1016,7 @@ export default function Wire(): React.JSX.Element {
               })}
             </div>
 
-            <div className="wire-view-stage">
+            <div className="wire-view-stage" ref={viewStageRef}>
               <div className="wire-pane-host" ref={paneHostRef}>
                 <div
                   className={`wire-view-pane${activeView === 'map' ? ' is-active' : ''}`}

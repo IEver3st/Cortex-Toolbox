@@ -30,7 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { EmptyState } from '../../components/UiPrimitives';
 import { downloadText, readSelectedFiles } from '../shared/download';
 
-type PreparedFix = {
+interface PreparedFix {
   findingId: string;
   file: string;
   fileName: string;
@@ -39,16 +39,16 @@ type PreparedFix = {
   repairedContent: string;
   summary: string;
   linesChanged: number;
-};
+}
 
-type ApplySummary = {
+interface ApplySummary {
   filesChanged: number;
   linesChanged: number;
   validationOk: boolean;
   remainingManual: number;
   backupLabel: string;
   appliedAt: string;
-};
+}
 
 type SeverityFilter = 'all' | 'error' | 'warning' | 'info';
 type RepairStateFilter = 'all' | 'candidate' | 'prepared' | 'manual' | 'skipped' | 'none';
@@ -147,7 +147,7 @@ function SourceExcerpt({
     <pre className="align-excerpt align-excerpt-lined" aria-label="Source excerpt">
       <code>
         {lines.map((line, index) => {
-          const match = line.match(/^\s*(\d+)\s*\|\s?(.*)$/);
+          const match = /^\s*(\d+)\s*\|\s?(.*)$/.exec(line);
           const lineNo = match ? Number(match[1]) : null;
           const content = match ? match[2] : line;
           const isHighlight = lineNo === highlightLine;
@@ -353,7 +353,7 @@ export default function Align(): React.JSX.Element {
 
   const prepareFix = (finding: MetaFinding) => {
     const repair = finding.repair;
-    if (!repair || !repair.validated) return;
+    if (!repair?.validated) return;
     setPrepared((prev) => {
       const next = new Map(prev);
       next.set(finding.id, {
@@ -1020,18 +1020,14 @@ export default function Align(): React.JSX.Element {
                       window.open(url, '_blank', 'noopener,noreferrer');
                       window.setTimeout(() => URL.revokeObjectURL(url), 0);
                     }}
-                    onCopyChange={async () => {
+                    onCopyChange={() => {
                       const repair = selected.repair;
                       if (!repair) return;
                       const text =
                         repair.linesChanged <= 1
                           ? `- ${repair.before}\n+ ${repair.after}`
                           : `Before:\n${repair.before}\n\nAfter:\n${repair.after}`;
-                      try {
-                        await navigator.clipboard.writeText(text);
-                      } catch {
-                        /* ignore */
-                      }
+                      void navigator.clipboard.writeText(text).catch(() => undefined);
                     }}
                   />
                 )}
@@ -1187,7 +1183,7 @@ function FindingInspector({
           <ExternalLink aria-hidden="true" />
           Open file
         </button>
-        <button type="button" onClick={() => void onCopyChange()} disabled={!repair}>
+        <button type="button" onClick={() => onCopyChange()} disabled={!repair}>
           <Copy aria-hidden="true" />
           Copy proposed change
         </button>

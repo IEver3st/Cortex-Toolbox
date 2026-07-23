@@ -89,7 +89,7 @@ export function ProbeFindingsToolbar({
           onChange={(event) => onCategoryFilter(event.target.value as CategoryFilter)}
         >
           <option value="all">All categories</option>
-          {(Object.keys(CATEGORY_LABEL) as Array<keyof typeof CATEGORY_LABEL>).map((key) => (
+          {(Object.keys(CATEGORY_LABEL) as (keyof typeof CATEGORY_LABEL)[]).map((key) => (
             <option key={key} value={key}>
               {CATEGORY_LABEL[key]}
             </option>

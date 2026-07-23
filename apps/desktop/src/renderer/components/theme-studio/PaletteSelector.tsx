@@ -148,7 +148,9 @@ export function PaletteSelector({
             <div className="theme-palette-menu-search">
               <input
                 type="search"
-                placeholder="Search palettes"
+                name="paletteSearch"
+                autoComplete="off"
+                placeholder="Search palettes…"
                 value={query}
                 autoFocus
                 aria-label="Search palettes"
@@ -158,7 +160,12 @@ export function PaletteSelector({
                 }}
               />
             </div>
-            <div className="theme-palette-menu-list" role="listbox" aria-label="Palettes">
+            <div
+              id={`${id}-listbox`}
+              className="theme-palette-menu-list"
+              role="listbox"
+              aria-label="Palettes"
+            >
               {groups.map((group) => {
                 const items = flatOptions.filter((option) => option.group === group.key);
                 if (items.length === 0) return null;
@@ -257,6 +264,7 @@ export function PaletteSelector({
         className="theme-palette-trigger"
         role="combobox"
         aria-labelledby={`${id}-label`}
+        aria-controls={`${id}-listbox`}
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((current) => !current)}

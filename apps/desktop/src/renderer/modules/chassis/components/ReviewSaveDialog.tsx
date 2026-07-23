@@ -53,68 +53,74 @@ export function ReviewSaveDialog({
             </Dialog.Close>
           </div>
 
-          {grouped.map((group) => (
-            <section key={group.section} className="chassis-review-group">
-              <h3>{group.label}</h3>
-              <ul className="chassis-review-change-list">
-                {group.items.map((change) => (
-                  <li key={change.id}>
-                    <div>
-                      <strong>{change.label}</strong>
-                      <code>
-                        {change.before} → {change.after}
-                      </code>
-                      <small>
-                        {change.sourceFile} · {change.technicalName}
-                      </small>
-                    </div>
+          <div className="chassis-review-dialog-body">
+            {grouped.map((group) => (
+              <section key={group.section} className="chassis-review-group">
+                <h3>{group.label}</h3>
+                <ul className="chassis-review-change-list">
+                  {group.items.map((change) => (
+                    <li key={change.id} className="chassis-review-change-row">
+                      <span className="chassis-review-change-label">{change.label}</span>
+                      <span className="chassis-review-change-diff">
+                        <span className="chassis-review-change-before">{change.before}</span>
+                        <span className="chassis-review-change-arrow" aria-hidden="true">
+                          →
+                        </span>
+                        <span className="chassis-review-change-after">{change.after}</span>
+                      </span>
+                      <span className="chassis-review-change-source">
+                        <code>{change.sourceFile}</code>
+                        <span aria-hidden="true">·</span>
+                        <code>{change.technicalName}</code>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+
+            <section className="chassis-review-group">
+              <h3>Files to update</h3>
+              <ul className="chassis-review-files">
+                {fileSummaries.map((file) => (
+                  <li key={file.file}>
+                    <code>{file.file}</code>
+                    <span>{file.unchanged ? 'unchanged' : `${file.changeCount} changes`}</span>
                   </li>
                 ))}
               </ul>
             </section>
-          ))}
 
-          <section className="chassis-review-group">
-            <h3>Files to update</h3>
-            <ul className="chassis-review-files">
-              {fileSummaries.map((file) => (
-                <li key={file.file}>
-                  <code>{file.file}</code>
-                  <span>{file.unchanged ? 'unchanged' : `${file.changeCount} changes`}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
+            <div className="index-review-validation">
+              <h3>Validation</h3>
+              {blockingErrors > 0 ? (
+                <p className="index-review-blocked" role="alert">
+                  <XCircle aria-hidden="true" />
+                  {blockingErrors} blocking error{blockingErrors === 1 ? '' : 's'} must be resolved
+                  before saving.
+                </p>
+              ) : (
+                <p className="index-review-ok">
+                  <Check aria-hidden="true" />
+                  No blocking errors detected.
+                </p>
+              )}
+              {warnings > 0 ? (
+                <p className="index-review-warn">
+                  <AlertTriangle aria-hidden="true" />
+                  {warnings} warning{warnings === 1 ? '' : 's'} — review recommended.
+                </p>
+              ) : null}
+            </div>
 
-          <div className="index-review-validation">
-            <h3>Validation</h3>
-            {blockingErrors > 0 ? (
-              <p className="index-review-blocked" role="alert">
-                <XCircle aria-hidden="true" />
-                {blockingErrors} blocking error{blockingErrors === 1 ? '' : 's'} must be resolved
-                before saving.
-              </p>
-            ) : (
-              <p className="index-review-ok">
-                <Check aria-hidden="true" />
-                No blocking errors detected.
-              </p>
-            )}
-            {warnings > 0 ? (
-              <p className="index-review-warn">
-                <AlertTriangle aria-hidden="true" />
-                {warnings} warning{warnings === 1 ? '' : 's'} — review recommended.
-              </p>
-            ) : null}
+            <div className="safety-note">
+              <ShieldCheck aria-hidden="true" />
+              Existing files receive a timestamped backup under <code>.cortex/backups/</code> before
+              atomic replacement.
+            </div>
           </div>
 
-          <div className="safety-note">
-            <ShieldCheck aria-hidden="true" />
-            Existing files receive a timestamped backup under <code>.cortex/backups/</code> before
-            atomic replacement.
-          </div>
-
-          <div className="dialog-actions">
+          <div className="dialog-actions chassis-review-dialog-actions">
             <Dialog.Close asChild>
               <button type="button" disabled={applying}>
                 Cancel

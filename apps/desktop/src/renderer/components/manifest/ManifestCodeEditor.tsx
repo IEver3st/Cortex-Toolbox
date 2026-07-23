@@ -152,10 +152,15 @@ export function ManifestCodeEditor({
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
+  const onPathClickRef = useRef(onPathClick);
+  const initialRef = useRef({ value, readOnly, problems });
   const readOnlyCompartment = useRef(new Compartment());
   const lintCompartment = useRef(new Compartment());
 
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    onPathClickRef.current = onPathClick;
+  }, [onChange, onPathClick]);
 
   useEffect(() => {
     if (!hostRef.current || viewRef.current) return;
@@ -167,7 +172,7 @@ export function ManifestCodeEditor({
     const view = new EditorView({
       parent: hostRef.current,
       state: EditorState.create({
-        doc: value,
+        doc: initialRef.current.value,
         extensions: [
           basicSetup,
           lineNumbers(),
@@ -188,8 +193,11 @@ export function ManifestCodeEditor({
             ...searchKeymap,
             indentWithTab,
           ]),
-          readOnlyCompartment.current.of(EditorState.readOnly.of(readOnly)),
-          lintCompartment.current.of([lintGutter(), buildLintExtension(problems)]),
+          readOnlyCompartment.current.of(EditorState.readOnly.of(initialRef.current.readOnly)),
+          lintCompartment.current.of([
+            lintGutter(),
+            buildLintExtension(initialRef.current.problems),
+          ]),
           updateListener,
           EditorView.domEventHandlers({
             click(event, view) {
@@ -200,12 +208,12 @@ export function ManifestCodeEditor({
               if (!/['"]/.test(text)) return false;
               const matches = [...text.matchAll(quotedPathRegex)];
               for (const match of matches) {
-                const start = line.from + (match.index ?? 0);
+                const start = line.from + match.index;
                 const end = start + match[0].length;
                 if (pos >= start && pos <= end) {
                   const pathValue = match[2];
                   if (pathValue && /[./\\]/.test(pathValue)) {
-                    onPathClick?.(line.number);
+                    onPathClickRef.current?.(line.number);
                     return true;
                   }
                 }

@@ -68,10 +68,6 @@ const api: CortexApi = {
     summary: () => invoke(channels.workspaceSummary, {}),
     analyze: () => invoke(channels.analysisRun, {}),
     exportAnalysis: (input) => invoke(channels.analysisExport, input),
-    assets: () => invoke(channels.assetsInventory, {}),
-    processTexture: (input) => invoke(channels.texturesProcess, input),
-    previewTexture: (input) => invoke(channels.texturesPreview, input),
-    extractYtd: (input) => invoke(channels.texturesExtractYtd, input),
     exportWorkbench: (input) => invoke(channels.workbenchExport, input),
   },
   plugins: {

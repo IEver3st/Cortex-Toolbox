@@ -26,11 +26,11 @@ function resolveStoredPaletteTokens(
   const variant = mode === 'light' ? palette.light : palette.dark;
   if (!variant) return null;
   const base = resolveBuiltinTokens('everforest', mode);
-  return mergeTokens(base, variant as TokenOverrides);
+  return mergeTokens(base, variant);
 }
 
 export function resolveActivePaletteId(preferences: Preferences): string {
-  return preferences.selectedPaletteId ?? preferences.themePreset;
+  return preferences.selectedPaletteId;
 }
 
 export function resolveBasePaletteId(preferences: Preferences): string {
@@ -39,8 +39,7 @@ export function resolveBasePaletteId(preferences: Preferences): string {
   }
   const active = resolveActivePaletteId(preferences);
   if (isBuiltinPaletteId(active)) return active;
-  const custom = preferences.customPalettes.find((palette) => palette.id === active);
-  return custom ? preferences.themePreset : preferences.themePreset;
+  return preferences.themePreset;
 }
 
 export function resolveThemeTokens(
@@ -54,10 +53,8 @@ export function resolveThemeTokens(
     tokens = resolveBuiltinTokens(activeId, mode);
   } else {
     const custom = preferences.customPalettes.find((palette) => palette.id === activeId);
-    tokens =
-      custom && resolveStoredPaletteTokens(custom, mode)
-        ? resolveStoredPaletteTokens(custom, mode)!
-        : resolveBuiltinTokens(preferences.themePreset, mode);
+    const customTokens = custom ? resolveStoredPaletteTokens(custom, mode) : null;
+    tokens = customTokens ?? resolveBuiltinTokens(preferences.themePreset, mode);
   }
 
   const overrides =
@@ -94,13 +91,8 @@ export function isCustomizedPalette(preferences: Preferences): boolean {
 
 export function paletteDisplayName(preferences: Preferences): string {
   if (isCustomizedPalette(preferences)) {
-    const base = builtinPaletteMeta(
-      isBuiltinPaletteId(resolveBasePaletteId(preferences))
-        ? (resolveBasePaletteId(
-            preferences,
-          ) as import('../../../shared/theme-schema').BuiltinPaletteId)
-        : 'everforest',
-    );
+    const baseId = resolveBasePaletteId(preferences);
+    const base = builtinPaletteMeta(isBuiltinPaletteId(baseId) ? baseId : 'everforest');
     return `Custom · based on ${base.name}`;
   }
   const active = resolveActivePaletteId(preferences);

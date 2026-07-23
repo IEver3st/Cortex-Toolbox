@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import { cp, mkdir, mkdtemp, readFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -18,13 +18,11 @@ test('first launch explains the local workspace model', async () => {
   page.on('pageerror', (error) =>
     console.error(`[renderer:error] ${error.stack ?? error.message}`),
   );
-  await expect(page.getByRole('heading', { name: 'What are you working on?' })).toBeVisible();
-  await expect(
-    page.getByText('Open an existing folder, create a new project, import a resource'),
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open workspace' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Import resource' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Open your first workspace' })).toBeVisible();
+  await expect(page.getByText('Choose a project folder and Cortex will detect')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open a folder' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create an example workspace' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Read the quick introduction' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to workspace' })).toBeFocused();
@@ -37,13 +35,37 @@ test('settings expose useful local preferences and auto-save', async () => {
   const app = await launch();
   const page = await app.firstWindow();
   await expect(page.locator('.cursor-settings')).toBeAttached();
-  const settingsOpenStartedAt = performance.now();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  const settingsButton = page.getByRole('button', { name: 'Settings' });
+  await settingsButton.evaluate((button) =>
+    button.addEventListener(
+      'click',
+      () => {
+        document.documentElement.dataset.e2eNavigationStartedAt = String(performance.now());
+      },
+      { once: true },
+    ),
+  );
+  await settingsButton.click();
   await expect(page.getByRole('heading', { name: 'General', level: 1 })).toBeVisible();
-  expect(performance.now() - settingsOpenStartedAt).toBeLessThan(300);
+  const settingsOpenElapsed = await page.evaluate(
+    () => performance.now() - Number(document.documentElement.dataset.e2eNavigationStartedAt ?? 0),
+  );
+  console.log(`Settings opened in ${settingsOpenElapsed.toFixed(1)} ms`);
+  expect(settingsOpenElapsed).toBeLessThan(300);
   await expect(page.getByRole('button', { name: 'Back to app' })).toBeVisible();
   await page.getByRole('button', { name: 'Privacy and data' }).click();
   await expect(page.getByRole('heading', { name: 'Privacy and data' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Data handling' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Application' })).toBeHidden();
+
+  await page.getByRole('button', { name: 'About' }).click();
+  await expect(page.getByRole('heading', { name: 'About', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Application' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Updates' })).toBeVisible();
+  await page.getByRole('switch', { name: 'Experimental tools' }).click();
+  await page.getByRole('button', { name: 'Modules' }).click();
+  await expect(page.getByText('Extensions preview', { exact: true })).toBeVisible();
+  await expect(page.getByText('Extension code does not run.', { exact: false })).toBeVisible();
 
   await page.getByRole('button', { name: 'Editor' }).click();
   const fontSize = page.getByRole('combobox', { name: 'Code font size' });
@@ -63,10 +85,23 @@ test('settings expose useful local preferences and auto-save', async () => {
     )
     .toBe('14px');
 
-  const appReturnStartedAt = performance.now();
-  await page.getByRole('button', { name: 'Back to app' }).click();
+  const backButton = page.getByRole('button', { name: 'Back to app' });
+  await backButton.evaluate((button) =>
+    button.addEventListener(
+      'click',
+      () => {
+        document.documentElement.dataset.e2eNavigationStartedAt = String(performance.now());
+      },
+      { once: true },
+    ),
+  );
+  await backButton.click();
   await expect(page.locator('.launchpad')).toBeVisible();
-  expect(performance.now() - appReturnStartedAt).toBeLessThan(300);
+  const appReturnElapsed = await page.evaluate(
+    () => performance.now() - Number(document.documentElement.dataset.e2eNavigationStartedAt ?? 0),
+  );
+  console.log(`Settings returned to app in ${appReturnElapsed.toFixed(1)} ms`);
+  expect(appReturnElapsed).toBeLessThan(300);
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Editor', level: 1 })).toBeVisible();
@@ -135,8 +170,6 @@ test('opens, audits, edits, and packages a resource end to end', async () => {
   const resourceRoot = path.join(temporary, 'hello-cortex');
   const archivePath = path.join(temporary, 'hello-cortex.zip');
   await cp('packages/test-fixtures/resources/hello-cortex', resourceRoot, { recursive: true });
-  await mkdir(path.join(resourceRoot, 'assets'), { recursive: true });
-  await cp('apps/desktop/assets/brand/icon.png', path.join(resourceRoot, 'assets', 'test.png'));
   const app = await launch();
   await app.evaluate(
     ({ dialog }, paths) => {
@@ -151,51 +184,31 @@ test('opens, audits, edits, and packages a resource end to end', async () => {
     console.error(`[renderer:error] ${error.stack ?? error.message}`),
   );
 
-  await page.getByRole('main').getByRole('button', { name: 'Open workspace' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Open a folder' }).click();
   await expect(page.getByRole('heading', { name: 'hello-cortex' })).toBeVisible();
-  await expect(page.getByRole('definition').filter({ hasText: 'fxmanifest.lua' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Manifest summary' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Index', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Review save' })).toBeVisible();
-  const editor = page.locator('.monaco-editor').first();
+  const editor = page.getByRole('textbox', { name: 'Manifest Lua source' });
   await editor.click({ position: { x: 120, y: 80 } });
   await page.keyboard.press('Control+A');
   await page.keyboard.insertText(
     "fx_version 'cerulean'\ngame 'gta5'\ndescription 'Edited safely by Cortex E2E'\nclient_script 'client/main.lua'\nserver_script 'server/main.lua'\n",
   );
-  await page.getByRole('button', { name: 'Review save' }).click();
-  await expect(page.getByRole('heading', { name: 'Review file change' })).toBeVisible();
-  await page.getByRole('button', { name: 'Apply selected change' }).click();
-  await expect(page.getByRole('heading', { name: 'Review file change' })).toBeHidden();
+  await page.getByRole('button', { name: 'Review & save' }).click();
+  const reviewDialog = page.getByRole('dialog', { name: 'Review & save' });
+  await expect(reviewDialog).toBeVisible();
+  await reviewDialog.getByRole('button', { name: 'Save manifest' }).click();
+  await expect(reviewDialog).toBeHidden();
   await expect
     .poll(async () => readFile(path.join(resourceRoot, 'fxmanifest.lua'), 'utf8'))
     .toContain('Edited safely by Cortex E2E');
 
-  await page.keyboard.press('Control+Shift+P');
-  await page.getByRole('option', { name: 'Sentinel' }).click();
+  await page.getByRole('button', { name: 'Sentinel', exact: true }).click();
   await page.getByRole('button', { name: 'Run validation' }).click();
   await expect(page.getByText('Ready to release').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Textures', exact: true }).click();
-  await expect(
-    page.getByRole('main').getByText('Texture Converter', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Preview of assets/test.png' })).toBeVisible();
-  await page.getByLabel('Output format').selectOption('dds');
-  await page.getByRole('button', { name: 'Create DDS' }).click();
-  await expect
-    .poll(async () => {
-      try {
-        const buffer = await readFile(path.join(resourceRoot, 'assets', 'test-converted.dds'));
-        return buffer.subarray(0, 4).toString();
-      } catch {
-        return '';
-      }
-    })
-    .toBe('DDS ');
-
-  await page.keyboard.press('Control+Shift+P');
-  await page.getByRole('option', { name: 'Bundle' }).click();
+  await page.getByRole('button', { name: 'Bundle', exact: true }).click();
   await page.getByRole('button', { name: 'Dry run' }).click();
   await expect(
     page.locator('.preview-files code').filter({ hasText: 'fxmanifest.lua' }),
@@ -218,7 +231,7 @@ test('standalone creative modules work without an open workspace', async () => {
   );
 
   await page.getByRole('button', { name: 'Pulse' }).click();
-  await expect(page.getByRole('heading', { name: 'Pulse' })).toBeVisible();
+  await expect(page.getByText('Pulse siren patterns', { exact: true })).toBeVisible();
   const steps = page.getByRole('gridcell');
   await expect(steps).toHaveCount(768);
   await expect(page.locator('.pulse-lightbar button')).toHaveCount(24);
@@ -235,7 +248,7 @@ test('standalone creative modules work without an open workspace', async () => {
 
   await page.getByRole('button', { name: 'Chassis' }).click();
   await expect(page.getByRole('main').getByText('Chassis', { exact: true })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'vehicles.meta' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Chassis sections' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Align' }).click();
   await expect(
@@ -252,11 +265,13 @@ test('standalone creative modules work without an open workspace', async () => {
     .toBeGreaterThan(500);
   await page.getByRole('button', { name: /Recovery amber/i }).click();
   await expect(page.getByRole('textbox', { name: 'Stripe A', exact: true })).toHaveValue('#EE9E2D');
-  await page.getByRole('button', { name: 'Headlamp' }).click();
-  await expect(page.getByRole('button', { name: 'Headlamp' })).toHaveAttribute(
+  await page.getByRole('button', { name: 'Flashlight' }).click();
+  await expect(page.getByRole('button', { name: 'Flashlight' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
+  await page.locator('.chevron-canvas-stage').hover({ position: { x: 160, y: 120 } });
+  await expect(page.locator('.chevron-spotlight-overlay.is-engaged')).toBeVisible();
   await page.getByRole('button', { name: 'Mask', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Mask', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -274,7 +289,11 @@ test('Chassis exposes guided tuning and editable chassis setup', async () => {
   await expect(page.getByRole('heading', { name: 'Chassis', level: 1 })).toBeVisible();
   await expect(page.getByText('Derived behavior profile', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Balanced street' }).click();
+  await page
+    .getByRole('navigation', { name: 'Chassis sections' })
+    .getByRole('button', { name: 'Handling' })
+    .click();
+  await page.getByRole('button', { name: 'Track sport', exact: true }).click();
   await page.getByRole('button', { name: 'Apply preset' }).click();
   await page
     .getByRole('navigation', { name: 'Chassis sections' })
@@ -284,6 +303,7 @@ test('Chassis exposes guided tuning and editable chassis setup', async () => {
   await page.getByRole('button', { name: 'SPORTS CAR' }).click();
   await page.getByRole('button', { name: 'Review & save' }).click();
   await expect(page.getByRole('heading', { name: 'Review & save' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
   await page
     .getByRole('navigation', { name: 'Chassis sections' })
     .getByRole('button', { name: 'Source' })

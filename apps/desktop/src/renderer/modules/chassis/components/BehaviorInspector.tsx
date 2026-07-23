@@ -1,6 +1,6 @@
 import type { HandlingValues } from '@cortex/vehicle-meta';
 import { Gauge } from 'lucide-react';
-import type { BehaviorProfile, FieldChange } from '../types';
+import type { FieldChange } from '../types';
 import { buildBehaviorProfile, formatDrive } from '../chassis-utils';
 
 export function BehaviorInspector({
@@ -11,7 +11,6 @@ export function BehaviorInspector({
   onSelectChange,
   onResetField,
   onResetCategory,
-  categoryLabel,
 }: {
   handling: HandlingValues;
   savedHandling: HandlingValues;
@@ -20,11 +19,9 @@ export function BehaviorInspector({
   onSelectChange: (fieldKey: string) => void;
   onResetField: (fieldKey: string) => void;
   onResetCategory?: () => void;
-  categoryLabel?: string;
 }): React.JSX.Element {
   const current = buildBehaviorProfile(handling);
   const original = buildBehaviorProfile(savedHandling);
-  const hasChanges = changes.length > 0;
 
   return (
     <aside className="chassis-inspector" aria-label="Derived behavior profile">

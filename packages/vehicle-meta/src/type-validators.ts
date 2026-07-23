@@ -3,12 +3,15 @@
  * Never use JavaScript coercion that accepts a valid prefix and ignores junk.
  */
 
-export type ValidateOk = { ok: true; value: unknown };
-export type ValidateErr = {
+export interface ValidateOk {
+  ok: true;
+  value: unknown;
+}
+export interface ValidateErr {
   ok: false;
   reason: string;
   title: string;
-};
+}
 export type ValidateResult = ValidateOk | ValidateErr;
 
 const FLOAT_GRAMMAR = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;

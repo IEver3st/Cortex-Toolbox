@@ -407,11 +407,12 @@ function downloadCanvas(canvas: HTMLCanvasElement, filename: string, successMess
       toast.error('Could not render the PNG.');
       return;
     }
+    const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
-    anchor.href = URL.createObjectURL(blob);
+    anchor.href = objectUrl;
     anchor.download = filename;
     anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(anchor.href), 0);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
     toast.success(successMessage);
   }, 'image/png');
 }
@@ -569,14 +570,12 @@ export default function ChevronBuilder(): React.JSX.Element {
         return;
       }
       event.preventDefault();
-      setFlashlight((on) => {
-        if (on) setSpotlightEngaged(false);
-        return !on;
-      });
+      if (flashlight) setSpotlightEngaged(false);
+      setFlashlight(!flashlight);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [maskPreview]);
+  }, [flashlight, maskPreview]);
 
   useEffect(() => {
     if (canvasRef.current)
@@ -894,9 +893,13 @@ export default function ChevronBuilder(): React.JSX.Element {
                 </button>
               ))}
             </div>
-            <label>
-              Stripe width <output>{stripe}px</output>
+            <div className="chevron-range-field">
+              <div>
+                <label htmlFor="chevron-stripe-width">Stripe width</label>
+                <output htmlFor="chevron-stripe-width">{stripe}px</output>
+              </div>
               <input
+                id="chevron-stripe-width"
                 type="range"
                 name="chevronStripeWidth"
                 min={8}
@@ -907,10 +910,14 @@ export default function ChevronBuilder(): React.JSX.Element {
                   setStripe(Number(event.target.value));
                 }}
               />
-            </label>
-            <label>
-              Stripe angle <output>{angle}°</output>
+            </div>
+            <div className="chevron-range-field">
+              <div>
+                <label htmlFor="chevron-stripe-angle">Stripe angle</label>
+                <output htmlFor="chevron-stripe-angle">{angle}°</output>
+              </div>
               <input
+                id="chevron-stripe-angle"
                 type="range"
                 name="chevronStripeAngle"
                 min={15}
@@ -921,7 +928,7 @@ export default function ChevronBuilder(): React.JSX.Element {
                   setAngle(Number(event.target.value));
                 }}
               />
-            </label>
+            </div>
             <div className="chevron-toggle-row">
               <span>
                 <strong>UV center guide</strong>
@@ -999,9 +1006,13 @@ export default function ChevronBuilder(): React.JSX.Element {
                 Remove texture
               </button>
             ) : null}
-            <label>
-              Texture opacity <output>{texture.opacity}%</output>
+            <div className="chevron-range-field">
+              <div>
+                <label htmlFor="chevron-texture-opacity">Texture opacity</label>
+                <output htmlFor="chevron-texture-opacity">{texture.opacity}%</output>
+              </div>
               <input
+                id="chevron-texture-opacity"
                 type="range"
                 name="chevronTextureOpacity"
                 min={0}
@@ -1013,10 +1024,14 @@ export default function ChevronBuilder(): React.JSX.Element {
                   setTexture((current) => ({ ...current, opacity: Number(event.target.value) }));
                 }}
               />
-            </label>
-            <label>
-              Texture scale <output>{texture.scale}%</output>
+            </div>
+            <div className="chevron-range-field">
+              <div>
+                <label htmlFor="chevron-texture-scale">Texture scale</label>
+                <output htmlFor="chevron-texture-scale">{texture.scale}%</output>
+              </div>
               <input
+                id="chevron-texture-scale"
                 type="range"
                 name="chevronTextureScale"
                 min={20}
@@ -1028,7 +1043,7 @@ export default function ChevronBuilder(): React.JSX.Element {
                   setTexture((current) => ({ ...current, scale: Number(event.target.value) }));
                 }}
               />
-            </label>
+            </div>
           </section>
 
           <section className="chevron-control-section">
@@ -1089,10 +1104,8 @@ export default function ChevronBuilder(): React.JSX.Element {
                 disabled={maskPreview}
                 title="Turn off lights and preview reflective return (F)"
                 onClick={() => {
-                  setFlashlight((on) => {
-                    if (on) setSpotlightEngaged(false);
-                    return !on;
-                  });
+                  if (flashlight) setSpotlightEngaged(false);
+                  setFlashlight(!flashlight);
                 }}
               >
                 <Flashlight aria-hidden="true" /> Flashlight
@@ -1101,14 +1114,12 @@ export default function ChevronBuilder(): React.JSX.Element {
                 type="button"
                 aria-pressed={maskPreview}
                 onClick={() => {
-                  setMaskPreview((value) => {
-                    const next = !value;
-                    if (next) {
-                      setFlashlight(false);
-                      setSpotlightEngaged(false);
-                    }
-                    return next;
-                  });
+                  const next = !maskPreview;
+                  if (next) {
+                    setFlashlight(false);
+                    setSpotlightEngaged(false);
+                  }
+                  setMaskPreview(next);
                 }}
               >
                 <ScanLine aria-hidden="true" /> Mask
@@ -1139,7 +1150,7 @@ export default function ChevronBuilder(): React.JSX.Element {
             ref={stageRef}
             className={`chevron-canvas-stage is-${preview}${spotlightAiming ? ' has-spotlight' : ''}`}
             onPointerMove={(event) => {
-              if (!lightsOut || maskPreview || reducedMotion) return;
+              if (!lightsOut || reducedMotion) return;
               setSpotlightEngaged(true);
               updateSpotlightFromPointer(event);
             }}
@@ -1160,9 +1171,9 @@ export default function ChevronBuilder(): React.JSX.Element {
             </div>
             {showLightsOutOverlay ? (
               <div
-                className={`chevron-spotlight-overlay${spotlightActive ? ' is-engaged' : ''}`}
+                className={`chevron-spotlight-overlay${spotlightAiming ? ' is-engaged' : ''}`}
                 style={
-                  spotlightActive
+                  spotlightAiming
                     ? ({
                         '--spotlight-x': `${spotlight.x}%`,
                         '--spotlight-y': `${spotlight.y}%`,

@@ -11,7 +11,6 @@ export const moduleIdSchema = z.enum([
   'align',
   'pulse',
   'chevron',
-  'textures',
   'extensions',
 ]);
 
@@ -167,33 +166,19 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
     tags: ['livery', 'chevrons', 'png', 'fleet'],
   },
   {
-    id: 'textures',
-    kind: 'textures',
-    name: 'Texture Converter',
-    shortName: 'Textures',
-    description:
-      'Convert PNG, JPEG, WebP, and DDS textures locally, with optional YTD extraction through a configured tool.',
-    category: 'creative',
-    required: false,
-    defaultInstalled: true,
-    workspaceRequired: true,
-    navLabel: 'Textures',
-    tabLabel: 'Texture Converter',
-    tags: ['dds', 'png', 'webp', 'ytd', 'conversion'],
-  },
-  {
     id: 'extensions',
     kind: 'extensions',
-    name: 'Extensions',
+    name: 'Extensions preview',
     shortName: 'Extensions',
-    description: 'Install and manage third-party plugins that extend Cortex capabilities.',
+    description:
+      'Inspect workspace plugin manifests and requested permissions. Extension code does not run.',
     category: 'system',
     required: false,
     defaultInstalled: false,
     workspaceRequired: true,
-    navLabel: 'Extensions',
-    tabLabel: 'Extensions',
-    tags: ['plugins', 'sdk'],
+    navLabel: 'Extensions preview',
+    tabLabel: 'Extensions preview',
+    tags: ['plugins', 'manifest', 'experimental'],
   },
 ];
 

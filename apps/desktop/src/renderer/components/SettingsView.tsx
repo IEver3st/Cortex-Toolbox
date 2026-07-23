@@ -12,7 +12,6 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -61,7 +60,6 @@ type SectionId =
   | 'modules'
   | 'sidebar'
   | 'accessibility'
-  | 'integrations'
   | 'privacy'
   | 'support'
   | 'about';
@@ -98,12 +96,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         icon: PanelLeft,
         keywords: 'navigation order density category',
       },
-      {
-        id: 'integrations',
-        label: 'External tools',
-        icon: Wrench,
-        keywords: 'ytd converter executable',
-      },
     ],
   },
   {
@@ -117,9 +109,9 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       },
       {
         id: 'support',
-        label: 'Report a Problem',
+        label: 'Feedback',
         icon: Bug,
-        keywords: 'bug github issue logs diagnostics support feedback',
+        keywords: 'bug feature module github issue logs diagnostics support feedback request',
       },
       {
         id: 'about',
@@ -138,9 +130,8 @@ const TITLES: Record<SectionId, string> = {
   modules: 'Modules',
   sidebar: 'Sidebar',
   accessibility: 'Accessibility',
-  integrations: 'External tools',
   privacy: 'Privacy and data',
-  support: 'Report a Problem',
+  support: 'Feedback',
   about: 'About',
 };
 
@@ -148,7 +139,7 @@ const SECTION_LEAD: Partial<Record<SectionId, string>> = {
   privacy:
     'How Cortex handles files, network access, and external tools on this device. These guarantees are built in and cannot be turned off.',
   support:
-    'Create a GitHub issue with your report and the diagnostic events captured in this Cortex session.',
+    'Send bug reports, feature requests, or module ideas to GitHub with optional diagnostic events from this session.',
   about: 'Version info, release updates, and licensing for this installation.',
 };
 
@@ -233,7 +224,7 @@ function ReleaseBranchPreview({ branch }: { branch: string }): React.JSX.Element
   const isDeveloper = branch === 'developer';
   return (
     <div className="release-branch-preview">
-      <img src={brandIconUrl(isDeveloper ? 'developer' : 'stable')} alt="" />
+      <img src={brandIconUrl(isDeveloper ? 'developer' : 'stable')} alt="" width={32} height={32} />
       <span>
         <strong>{isDeveloper ? 'Developer' : 'Stable'} channel</strong>
         <small>
@@ -496,7 +487,9 @@ export function SettingsView(): React.JSX.Element {
           <input
             type="search"
             value={search}
-            placeholder="Search settings"
+            name="settingsSearch"
+            autoComplete="off"
+            placeholder="Search settings…"
             aria-label="Search settings"
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -635,7 +628,9 @@ export function SettingsView(): React.JSX.Element {
                   not touch project files.
                 </p>
                 <div className="settings-module-list">
-                  {MODULE_CATALOG.filter((module) => module.category !== 'system').map((module) => {
+                  {MODULE_CATALOG.filter(
+                    (module) => module.category !== 'system' || draft.experimentalTools,
+                  ).map((module) => {
                     const enabled = installedIds.has(module.id);
                     const busy = pendingModuleId === module.id;
                     return (
@@ -720,28 +715,6 @@ export function SettingsView(): React.JSX.Element {
               </SettingsGroup>
             ) : null}
 
-            {active === 'integrations' ? (
-              <SettingsGroup title="YTD extraction">
-                <Row
-                  label="YTDToolio executable"
-                  description="Optional local helper used only for YTD to ZIP extraction. DDS conversion is built in."
-                  htmlFor="ytd-tool-path"
-                  control={
-                    <input
-                      id="ytd-tool-path"
-                      value={draft.ytdToolPath}
-                      placeholder="C:\\Tools\\YTDToolio.exe"
-                      onChange={(event) => update('ytdToolPath', event.target.value)}
-                    />
-                  }
-                />
-                <p className="settings-note">
-                  Cortex never downloads or runs a converter silently. The exact executable path is
-                  stored locally and invoked only from Texture Converter.
-                </p>
-              </SettingsGroup>
-            ) : null}
-
             {active === 'about' ? (
               <>
                 <SettingsGroup title="Application">
@@ -790,7 +763,7 @@ export function SettingsView(): React.JSX.Element {
                   <ReleaseBranchPreview branch={draft.releaseBranch} />
                   <Row
                     label="Experimental tools"
-                    description="Show extension tooling that may change between releases."
+                    description="Show the Extensions manifest-discovery preview. Extension code does not run."
                     htmlFor="experimental-tools"
                     control={
                       <Toggle
@@ -853,7 +826,7 @@ export function SettingsView(): React.JSX.Element {
             ) : null}
 
             {active === 'support' ? (
-              <SettingsGroup title="GitHub Issue Reporter">
+              <SettingsGroup title="Feedback">
                 <BugReportForm />
               </SettingsGroup>
             ) : null}

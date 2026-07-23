@@ -25,8 +25,12 @@ export function BalanceControl({
         max={max}
         step={step}
         value={value}
+        aria-label={`${rearLabel} to ${frontLabel}`}
         aria-valuetext={`${Math.round(value * 100)}% front`}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={(event) => {
+          const next = event.currentTarget.valueAsNumber;
+          if (Number.isFinite(next)) onChange(next);
+        }}
       />
       <span className="chassis-balance-label">{frontLabel}</span>
       <output className="chassis-balance-output">{value.toFixed(2)}</output>

@@ -61,7 +61,7 @@ export function installBrowserDevShim(): void {
   if (!import.meta.env.DEV) return;
   // contextBridge exposes window.cortex without passing Object.hasOwn — probing the API avoids
   // clobbering the real preload bridge in the Electron dev window.
-  if (typeof window.cortex?.projects?.open === 'function') return;
+  if (typeof window.cortex.projects.open === 'function') return;
 
   const api: CortexApi = {
     projects: {
@@ -92,10 +92,6 @@ export function installBrowserDevShim(): void {
       summary: async () => ok(emptySummary),
       analyze: async () => ok(emptyAnalysis),
       exportAnalysis: async () => ok(null),
-      assets: async () => ok({ images: [], models: [], timelines: [] }),
-      processTexture: async () => browserOnly(),
-      previewTexture: async () => browserOnly(),
-      extractYtd: async () => browserOnly(),
       exportWorkbench: async () => browserOnly(),
     },
     plugins: {

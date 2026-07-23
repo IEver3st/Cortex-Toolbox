@@ -123,8 +123,6 @@ export default function Chassis(): React.JSX.Element {
     () => computeFieldChanges(savedConfig, config),
     [savedConfig, config],
   );
-  const unsavedCount = fieldChanges.length + (sourceEdited ? 1 : 0);
-
   const categoryChanges = useMemo(
     () =>
       fieldChanges.filter(

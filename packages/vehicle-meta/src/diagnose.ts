@@ -161,11 +161,11 @@ const ATTRIBUTE_ONLY_TAGS = new Set([
   'value',
 ]);
 
-type NumericFieldMeta = {
+interface NumericFieldMeta {
   key: string;
   nativeType: 'float' | 'int';
   label: string;
-};
+}
 
 const NUMERIC_VALUE_TAGS = new Map<string, NumericFieldMeta>([
   ...HANDLING_FIELDS.map(
@@ -889,7 +889,7 @@ function tryUnclosedAttributeQuote(
     const line = lines[lineIndex] ?? '';
     const quoteCount = (line.match(/"/g) ?? []).length;
     if (quoteCount % 2 === 0) continue;
-    if (!line.includes('<') || !/=/.test(line)) continue;
+    if (!line.includes('<') || !line.includes('=')) continue;
 
     // Insert closing quote before optional / and >
     const fixedLine = line.replace(/(\s*\/\s*>\s*|\s*>\s*)$/, '"$1');
@@ -1281,6 +1281,8 @@ function editDistance(left: string, right: string): number {
   return grid[a.length]![b.length]!;
 }
 
+// Retained as a compatibility reference while the staged pipeline supersedes this implementation.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function crossFileFindings(files: MetaFileInput[]): MetaFinding[] {
   const findings: MetaFinding[] = [];
   const groups = new Map<string, MetaFileInput[]>();
@@ -1372,7 +1374,7 @@ function crossFileFindings(files: MetaFileInput[]): MetaFinding[] {
       const kitRefs = [...kitBody.matchAll(/<Item>([^<]+)<\/Item>/gi)].map((match) => ({
         value: match[1]?.trim() ?? '',
         index:
-          (variations.content.indexOf(kitBody) >= 0 ? variations.content.indexOf(kitBody) : 0) +
+          (variations.content.includes(kitBody) ? variations.content.indexOf(kitBody) : 0) +
           (match.index ?? 0),
       }));
 
@@ -1445,7 +1447,7 @@ function textValuesFromSection(
   itemTag: string,
 ): { value: string; index: number }[] {
   const open = new RegExp(`<${sectionTag}(?:\\s[^>]*)?>`, 'i').exec(source);
-  if (!open || open.index === undefined) return [];
+  if (open?.index === undefined) return [];
   const bodyStart = open.index + open[0].length;
   const close = source.toLowerCase().indexOf(`</${sectionTag.toLowerCase()}>`, bodyStart);
   if (close < 0) return [];
@@ -1658,7 +1660,7 @@ function bindingFindings(files: MetaFileInput[]): {
         const after = replaceValue(before, tag, bound, expected);
         working.set(variations.name, after);
         addSummary(variations.name, `Matched ${tag} ${bound} to local ${pool} ID ${expected}.`);
-        const match = before.match(new RegExp(`<${tag}\\s+value=["']${bound}["']\\s*/?>`, 'i'));
+        const match = new RegExp(`<${tag}\\s+value=["']${bound}["']\\s*/?>`, 'i').exec(before);
         const index = match?.index ?? 0;
         const loc = offsetToLocation(before, index);
         findings.push({
@@ -1771,8 +1773,8 @@ function toIssue(finding: MetaFinding): MetaIssue {
     id: finding.id,
     severity: finding.severity,
     file: finding.file,
-    message: finding.message,
-    evidence: finding.evidence,
+    message: finding.explanation,
+    evidence: finding.excerpt,
     fixable: finding.fixable,
   };
 }

@@ -278,7 +278,6 @@ function mapWarnings(file: ProbeScriptAnalysis, findings: ProbeFinding[], seen: 
       const match = rule.pattern.exec(warning);
       if (!match) continue;
       const line = match[2] ? Number(match[2]) : lineFromWarning(warning);
-      const meta = PROBE_RULE_META[rule.ruleId];
       pushFinding(findings, seen, {
         ruleId: rule.ruleId,
         severity: rule.severity,

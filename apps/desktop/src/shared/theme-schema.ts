@@ -70,8 +70,8 @@ export const storedPaletteSchema = z.object({
   source: z.enum(['custom', 'imported']),
   modeSupport: z.enum(['light', 'dark', 'dual']),
   createdAt: z.string(),
-  light: foundationTokensSchema.merge(advancedTokensSchema.partial()).optional(),
-  dark: foundationTokensSchema.merge(advancedTokensSchema.partial()),
+  light: foundationTokensSchema.extend(advancedTokensSchema.partial().shape).optional(),
+  dark: foundationTokensSchema.extend(advancedTokensSchema.partial().shape),
 });
 
 export const themeOverridesSchema = z.object({
@@ -85,8 +85,8 @@ export const themeExportSchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(240).optional(),
   modeSupport: z.enum(['light', 'dark', 'dual']),
-  light: foundationTokensSchema.merge(advancedTokensSchema.partial()).optional(),
-  dark: foundationTokensSchema.merge(advancedTokensSchema.partial()),
+  light: foundationTokensSchema.extend(advancedTokensSchema.partial().shape).optional(),
+  dark: foundationTokensSchema.extend(advancedTokensSchema.partial().shape),
 });
 
 export type FoundationTokens = z.infer<typeof foundationTokensSchema>;

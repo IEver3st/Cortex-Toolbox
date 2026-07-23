@@ -1,18 +1,26 @@
 import { app, BrowserWindow, shell } from 'electron';
+import { createHash } from 'node:crypto';
+import { once } from 'node:events';
 import { createWriteStream } from 'node:fs';
-import { access, mkdir, readdir, stat } from 'node:fs/promises';
+import { access, mkdir, readdir, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { brandingForChannel } from '../shared/branding';
 import type { Preferences, UpdateStatus } from '../shared/contracts';
 import { updatesChangedEvent } from '../shared/contracts';
 import type { MainEnv } from './config/env';
+import { assertTrustedGitHubAssetUrl, checksumForAsset } from './update-integrity';
+
+interface GitHubAsset {
+  name: string;
+  browser_download_url: string;
+}
 
 interface GitHubRelease {
   tag_name: string;
   html_url: string;
   prerelease: boolean;
   draft: boolean;
-  assets: { name: string; browser_download_url: string }[];
+  assets: GitHubAsset[];
 }
 
 function parseSemver(value: string): [number, number, number] | null {
@@ -35,9 +43,11 @@ function isNewerVersion(remote: string, local: string): boolean {
 }
 
 function installerExtension(): string {
-  if (process.platform === 'darwin') return '.dmg';
-  if (process.platform === 'linux') return '.AppImage';
   return '.exe';
+}
+
+function checksumAssetName(): string {
+  return 'SHA256SUMS-Windows.txt';
 }
 
 function baseStatus(overrides: Partial<UpdateStatus> = {}): UpdateStatus {
@@ -79,7 +89,8 @@ export class UpdateService {
     return (
       this.env.CORTEX_ENABLE_AUTO_UPDATE &&
       Boolean(this.env.CORTEX_GITHUB_OWNER && this.env.CORTEX_GITHUB_REPOSITORY) &&
-      app.isPackaged
+      app.isPackaged &&
+      process.platform === 'win32'
     );
   }
 
@@ -92,7 +103,9 @@ export class UpdateService {
       this.publish(
         this.disabledStatus(
           app.isPackaged
-            ? 'Automatic updates are not configured for this build.'
+            ? process.platform === 'win32'
+              ? 'Automatic updates are not configured for this build.'
+              : 'In-app updates are currently available on Windows only.'
             : 'Updates are available only in packaged releases.',
         ),
       );
@@ -151,7 +164,7 @@ export class UpdateService {
       this.pendingInstaller = null;
       this.publish(next);
       if (preferences.autoDownloadUpdates) {
-        return await this.download(asset.browser_download_url);
+        return await this.download(asset, release);
       }
       return next;
     } catch (error) {
@@ -160,33 +173,33 @@ export class UpdateService {
     }
   }
 
-  async download(assetUrl?: string): Promise<UpdateStatus> {
+  async download(asset?: GitHubAsset, release?: GitHubRelease): Promise<UpdateStatus> {
     if (!this.updatesEnabled()) return this.publish(this.disabledStatus(this.status.message ?? ''));
     if (this.downloadInFlight) return this.downloadInFlight;
     if (this.status.phase !== 'available' && this.status.phase !== 'error') {
       return this.status;
     }
-    this.downloadInFlight = this.runDownload(assetUrl).finally(() => {
+    this.downloadInFlight = this.runDownload(asset, release).finally(() => {
       this.downloadInFlight = null;
     });
     return this.downloadInFlight;
   }
 
-  private async runDownload(assetUrl?: string): Promise<UpdateStatus> {
+  private async runDownload(asset?: GitHubAsset, release?: GitHubRelease): Promise<UpdateStatus> {
     const availableVersion = this.status.availableVersion;
     if (!availableVersion) {
       return this.publish(
         baseStatus({ phase: 'error', message: 'No update is available to download.' }),
       );
     }
-    let downloadUrl = assetUrl;
-    if (!downloadUrl) {
+    let downloadAsset: GitHubAsset | null | undefined = asset;
+    let sourceRelease: GitHubRelease | null | undefined = release;
+    if (!downloadAsset || !sourceRelease) {
       const preferences = this.readPreferences();
-      const release = await this.fetchLatestRelease(preferences.releaseBranch);
-      const asset = release ? this.pickInstallerAsset(release) : null;
-      downloadUrl = asset?.browser_download_url;
+      sourceRelease = await this.fetchLatestRelease(preferences.releaseBranch);
+      downloadAsset = sourceRelease ? this.pickInstallerAsset(sourceRelease) : null;
     }
-    if (!downloadUrl) {
+    if (!downloadAsset || !sourceRelease) {
       return this.publish(
         baseStatus({
           phase: 'error',
@@ -199,6 +212,7 @@ export class UpdateService {
     const targetDir = path.join(app.getPath('userData'), 'pending-update');
     const extension = installerExtension();
     const targetPath = path.join(targetDir, `cortex-update-${availableVersion}${extension}`);
+    const partialPath = `${targetPath}.partial`;
     this.publish(
       baseStatus({
         phase: 'downloading',
@@ -210,8 +224,11 @@ export class UpdateService {
     );
 
     try {
+      assertTrustedGitHubAssetUrl(downloadAsset.browser_download_url);
+      const expectedHash = await this.fetchExpectedChecksum(sourceRelease, downloadAsset);
       await mkdir(targetDir, { recursive: true });
-      const response = await fetch(downloadUrl, {
+      await unlink(partialPath).catch(() => undefined);
+      const response = await fetch(downloadAsset.browser_download_url, {
         headers: { Accept: 'application/octet-stream', 'User-Agent': 'Cortex-ToolBox' },
       });
       if (!response.ok || !response.body) {
@@ -219,13 +236,16 @@ export class UpdateService {
       }
       const total = Number(response.headers.get('content-length') ?? 0);
       const reader = response.body.getReader();
-      const file = createWriteStream(targetPath);
+      const file = createWriteStream(partialPath, { flags: 'wx' });
+      const hash = createHash('sha256');
       let received = 0;
       for (;;) {
         const chunk = await reader.read();
         if (chunk.done) break;
         received += chunk.value.byteLength;
-        file.write(Buffer.from(chunk.value));
+        const buffer = Buffer.from(chunk.value);
+        hash.update(buffer);
+        if (!file.write(buffer)) await once(file, 'drain');
         if (total > 0) {
           this.publish(
             baseStatus({
@@ -240,8 +260,15 @@ export class UpdateService {
       }
       await new Promise<void>((resolve, reject) => {
         file.end(() => resolve());
-        file.on('error', reject);
+        file.once('error', reject);
       });
+      const actualHash = hash.digest('hex');
+      if (actualHash !== expectedHash) {
+        await unlink(partialPath).catch(() => undefined);
+        throw new Error('The downloaded installer failed SHA-256 verification.');
+      }
+      await unlink(targetPath).catch(() => undefined);
+      await rename(partialPath, targetPath);
       this.pendingInstaller = targetPath;
       return this.publish(
         baseStatus({
@@ -253,6 +280,7 @@ export class UpdateService {
         }),
       );
     } catch (error) {
+      await unlink(partialPath).catch(() => undefined);
       const message = error instanceof Error ? error.message : 'Update download failed.';
       return this.publish(
         baseStatus({
@@ -263,6 +291,30 @@ export class UpdateService {
         }),
       );
     }
+  }
+
+  private async fetchExpectedChecksum(
+    release: GitHubRelease,
+    installer: GitHubAsset,
+  ): Promise<string> {
+    const checksumAsset = release.assets.find(
+      (asset) => asset.name.toLowerCase() === checksumAssetName().toLowerCase(),
+    );
+    if (!checksumAsset) {
+      throw new Error('This release does not include the required SHA-256 checksum file.');
+    }
+    assertTrustedGitHubAssetUrl(checksumAsset.browser_download_url);
+    const response = await fetch(checksumAsset.browser_download_url, {
+      headers: { Accept: 'text/plain', 'User-Agent': 'Cortex-ToolBox' },
+    });
+    if (!response.ok) {
+      throw new Error(`Checksum download failed with status ${response.status}.`);
+    }
+    const expected = checksumForAsset(await response.text(), installer.name);
+    if (!expected) {
+      throw new Error('The release checksum file does not cover this installer.');
+    }
+    return expected;
   }
 
   async install(): Promise<boolean> {

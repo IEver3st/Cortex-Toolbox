@@ -750,11 +750,22 @@ html[data-reduced-motion='true'] .start-view-host {
   flex-direction: column;
 }
 
+.wire-graph-panel > .wire-view-stage {
+  grid-row: 3;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 .wire-view-stage {
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
   height: 100%;
@@ -762,19 +773,16 @@ html[data-reduced-motion='true'] .start-view-host {
 }
 
 .wire-pane-host {
-  position: relative;
-  flex: 1;
-  display: grid;
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  position: absolute;
+  inset: 0;
   min-height: 0;
   min-width: 0;
-  height: 100%;
   overflow: hidden;
 }
 
 .wire-pane-host > .wire-view-pane {
-  grid-area: 1 / 1;
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -783,13 +791,19 @@ html[data-reduced-motion='true'] .start-view-host {
 }
 
 .wire-pane-host > .wire-view-pane:not(.is-active) {
-  display: none;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wire-pane-host > .wire-view-pane.is-active {
+  z-index: 1;
 }
 
 .wire-view-pane > .wire-graph-scroll,
 .wire-view-pane > .wire-editor,
 .wire-view-pane > .wire-editor-empty {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
   height: 100%;
@@ -15610,19 +15624,13 @@ html[data-sidebar-category-labels='false'] .nav-section-label {
 }
 
 .wire-graph-panel {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
   align-self: stretch;
   overflow: hidden;
   border-right: 1px solid var(--cortex-border-soft);
-}
-
-.wire-graph-panel > .wire-graph-toolbar,
-.wire-graph-panel > .wire-filter-row,
-.wire-graph-panel > .wire-legend {
-  flex-shrink: 0;
 }
 
 .wire-graph-toolbar {
@@ -15797,6 +15805,7 @@ html[data-sidebar-category-labels='false'] .nav-section-label {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  height: 100%;
   overflow: hidden;
   cursor: grab;
   background-color: var(--cortex-canvas);
@@ -16112,9 +16121,8 @@ button.wire-card-action:active:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
-  height: 100%;
   padding: 24px;
   color: var(--cortex-text-muted);
   font-size: var(--text-meta);
@@ -16202,7 +16210,7 @@ button.wire-card-action:active:not(:disabled) {
 .wire-editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -16293,7 +16301,8 @@ button.wire-card-action:active:not(:disabled) {
   font-weight: 700;
 }
 
-.chevron-control-section > label {
+.chevron-control-section > label,
+.chevron-range-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 5px 8px;
@@ -16301,8 +16310,13 @@ button.wire-card-action:active:not(:disabled) {
   font-size: var(--text-meta);
 }
 
-.chevron-control-section > label > input {
+.chevron-control-section > label > input,
+.chevron-range-field > input {
   grid-column: 1 / -1;
+}
+
+.chevron-range-field > div {
+  display: contents;
 }
 
 .chevron-control-section output {
@@ -18846,9 +18860,31 @@ button.wire-card-action:active:not(:disabled) {
 }
 
 .chassis-review-dialog {
+  display: flex;
+  flex-direction: column;
   width: min(720px, 92vw);
   max-height: 86vh;
+  overflow: hidden;
+  padding: 0;
+}
+
+.chassis-review-dialog .dialog-title {
+  flex-shrink: 0;
+}
+
+.chassis-review-dialog-body {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
+  padding: var(--space-4) var(--space-5);
+}
+
+.chassis-review-dialog-actions {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
 }
 
 .chassis-review-stats {
@@ -18893,7 +18929,7 @@ button.wire-card-action:active:not(:disabled) {
 
 .chassis-review-change-list {
   display: grid;
-  gap: 8px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -18901,15 +18937,76 @@ button.wire-card-action:active:not(:disabled) {
 
 .chassis-review-change-list li {
   display: grid;
-  gap: 2px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--cortex-border-soft);
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.chassis-review-change-list code,
-.chassis-review-change-list small {
+.chassis-review-change-row {
+  grid-template-columns: minmax(132px, 1.05fr) minmax(148px, 1.35fr) minmax(120px, 1fr);
+  align-items: baseline;
+  column-gap: var(--space-4);
+}
+
+.chassis-review-change-label {
+  color: var(--color-text-primary);
+  font-size: var(--text-control);
+  line-height: 1.35;
+}
+
+.chassis-review-change-diff {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-meta);
+  line-height: 1.35;
+}
+
+.chassis-review-change-before {
+  color: var(--color-text-muted);
+}
+
+.chassis-review-change-arrow {
+  color: var(--color-text-muted);
+}
+
+.chassis-review-change-after {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.chassis-review-change-source {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 0.3rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  text-align: right;
+}
+
+.chassis-review-change-source code {
+  font-family: var(--font-mono);
+  font-size: inherit;
+}
+
+.chassis-review-change-list li:not(.chassis-review-change-row) {
+  grid-template-columns: minmax(132px, 1fr) minmax(0, 1.5fr);
+  column-gap: var(--space-4);
+}
+
+.chassis-review-change-list li:not(.chassis-review-change-row) > span {
+  color: var(--color-text-primary);
+  font-size: var(--text-control);
+}
+
+.chassis-review-change-list li:not(.chassis-review-change-row) > code {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--color-text-secondary);
 }
 
 .chassis-review-files {
@@ -18926,6 +19023,18 @@ button.wire-card-action:active:not(:disabled) {
   justify-content: space-between;
   gap: 10px;
   font-size: 0.8125rem;
+}
+
+@media (max-width: 640px) {
+  .chassis-review-change-row {
+    grid-template-columns: 1fr;
+    row-gap: 6px;
+  }
+
+  .chassis-review-change-source {
+    justify-content: flex-start;
+    text-align: left;
+  }
 }
 
 @media (max-width: 1280px) {

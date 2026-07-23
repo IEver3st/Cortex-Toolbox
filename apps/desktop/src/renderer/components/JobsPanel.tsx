@@ -170,7 +170,7 @@ export function JobsPanel(): React.JSX.Element {
                     </div>
                   ) : (
                     <AnimatePresence initial={false}>
-                      {jobs.map((job, index) => {
+                      {jobs.map((job) => {
                         const started = formatRelativeTime(job.startedAt);
                         const finished = formatRelativeTime(job.finishedAt);
                         const timeLabel =

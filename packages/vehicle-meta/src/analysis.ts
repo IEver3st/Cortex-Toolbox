@@ -76,14 +76,6 @@ function splitLines(source: string): string[] {
   return source.split(/\r?\n/);
 }
 
-function lineStartOffsets(source: string): number[] {
-  const starts = [0];
-  for (let index = 0; index < source.length; index += 1) {
-    if (source[index] === '\n') starts.push(index + 1);
-  }
-  return starts;
-}
-
 function excerptAroundLine(source: string, line: number, radius = 1): string {
   const lines = splitLines(source);
   const start = Math.max(0, line - 1 - radius);
@@ -1179,9 +1171,7 @@ function validateBooleanAttributes(record: FileInventoryRecord): MetaFinding[] {
 
     // Dominant match for typos like truee → true
     const fixedSuggestion =
-      suggestion ??
-      (constrainedNearMatch(raw.toLowerCase(), ['true', 'false']) as string | null) ??
-      undefined;
+      suggestion ?? constrainedNearMatch(raw.toLowerCase(), ['true', 'false']) ?? undefined;
 
     let repairFields: Partial<FindingDraft> = { forceAvailability: 'manual' };
     if (fixedSuggestion === 'true' || fixedSuggestion === 'false') {
@@ -1676,6 +1666,8 @@ export function buildVehicleGraphs(
   };
 
   for (const symbol of symbols) {
+    // Empty owner/stem values must fall through to the stable source-file identity.
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const key = symbol.ownerVehicle || vehicleStem(symbol.value) || symbol.sourceFileId;
     const node = ensure(key);
     if (!node.sourceFileIds.includes(symbol.sourceFileId)) {

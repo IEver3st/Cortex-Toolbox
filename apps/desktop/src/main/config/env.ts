@@ -4,13 +4,20 @@ import { z } from 'zod';
 import { resolveChannel, type ReleaseChannel } from '../../shared/branding';
 
 declare const __CORTEX_RELEASE_CHANNEL__: string | undefined;
+declare const __CORTEX_GITHUB_OWNER__: string | undefined;
+declare const __CORTEX_GITHUB_REPOSITORY__: string | undefined;
+declare const __CORTEX_ENABLE_AUTO_UPDATE__: string | undefined;
 
 const booleanString = z.enum(['true', 'false']).transform((value) => value === 'true');
+const githubSlug = z
+  .string()
+  .trim()
+  .regex(/^$|^[A-Za-z0-9_.-]+$/, 'Use a GitHub owner or repository name, not a URL.');
 const envSchema = z.object({
   CORTEX_LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   CORTEX_RELEASE_CHANNEL: z.enum(['stable', 'beta', 'development']).default('development'),
-  CORTEX_GITHUB_OWNER: z.string().default(''),
-  CORTEX_GITHUB_REPOSITORY: z.string().default(''),
+  CORTEX_GITHUB_OWNER: githubSlug.default(''),
+  CORTEX_GITHUB_REPOSITORY: githubSlug.default(''),
   // Fine-grained token with repository Issues: Read and write permission. This
   // deliberately remains main-process-only and is never exposed over IPC.
   CORTEX_GITHUB_REPORT_TOKEN: z.string().default(''),
@@ -60,5 +67,19 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): MainEnv {
     ...source,
     CORTEX_RELEASE_CHANNEL:
       source.CORTEX_RELEASE_CHANNEL ?? local.CORTEX_RELEASE_CHANNEL ?? bakedChannel(),
+    CORTEX_GITHUB_OWNER:
+      source.CORTEX_GITHUB_OWNER ??
+      local.CORTEX_GITHUB_OWNER ??
+      (typeof __CORTEX_GITHUB_OWNER__ === 'string' ? __CORTEX_GITHUB_OWNER__ : undefined),
+    CORTEX_GITHUB_REPOSITORY:
+      source.CORTEX_GITHUB_REPOSITORY ??
+      local.CORTEX_GITHUB_REPOSITORY ??
+      (typeof __CORTEX_GITHUB_REPOSITORY__ === 'string' ? __CORTEX_GITHUB_REPOSITORY__ : undefined),
+    CORTEX_ENABLE_AUTO_UPDATE:
+      source.CORTEX_ENABLE_AUTO_UPDATE ??
+      local.CORTEX_ENABLE_AUTO_UPDATE ??
+      (typeof __CORTEX_ENABLE_AUTO_UPDATE__ === 'string'
+        ? __CORTEX_ENABLE_AUTO_UPDATE__
+        : undefined),
   });
 }

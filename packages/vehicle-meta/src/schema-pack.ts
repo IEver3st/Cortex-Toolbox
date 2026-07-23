@@ -265,6 +265,8 @@ export const FIELD_CONSTRAINTS: FieldConstraint[] = [
       attribute: 'value',
       type: range.integerOnly || name.startsWith('n') ? 'integer' : 'finiteFloat',
       finite: true,
+      // `false` intentionally falls through to the element-name convention.
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       integerOnly: range.integerOnly || name.startsWith('n'),
       range: rangeOut,
       repair: { strategy: 'nearestValidReferenceOrClamp', automaticClamp: false },

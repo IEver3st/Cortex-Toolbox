@@ -53,7 +53,7 @@ export default function Extensions(): React.JSX.Element {
     try {
       unwrap(await window.cortex.plugins.grant({ pluginId, permissions }));
       await client.invalidateQueries({ queryKey: ['plugins', workspace?.root] });
-      toast.success(permissions.length ? 'Extension permissions updated.' : 'Permissions revoked.');
+      toast.success(permissions.length ? 'Preview grants recorded.' : 'Preview grants cleared.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Permission update failed.');
     }
@@ -65,7 +65,7 @@ export default function Extensions(): React.JSX.Element {
         <section className="data-card">
           <div className="card-heading">
             <div>
-              <h2>Discovered extensions</h2>
+              <h2>Discovered manifests</h2>
               <p>.cortex/plugins/&lt;id&gt;/plugin.json</p>
             </div>
             <div className="card-heading-actions">
@@ -116,7 +116,7 @@ export default function Extensions(): React.JSX.Element {
                       </small>
                     </div>
                     <span className={`permission-state ${plugin.granted.length ? 'granted' : ''}`}>
-                      {plugin.granted.length ? `${plugin.granted.length} granted` : 'Inert'}
+                      {plugin.granted.length ? `${plugin.granted.length} preview grants` : 'Inert'}
                     </span>
                   </div>
                   <ChevronRight />
@@ -154,7 +154,7 @@ export default function Extensions(): React.JSX.Element {
               </div>
               <div className="plugin-actions">
                 <button type="button" onClick={() => void setGrant(selectedPlugin.manifest.id, [])}>
-                  Revoke all
+                  Clear preview grants
                 </button>
                 <button
                   type="button"
@@ -163,7 +163,7 @@ export default function Extensions(): React.JSX.Element {
                     void setGrant(selectedPlugin.manifest.id, selectedPlugin.manifest.permissions)
                   }
                 >
-                  Grant declared permissions
+                  Record declared grants
                 </button>
               </div>
             </>
@@ -171,8 +171,11 @@ export default function Extensions(): React.JSX.Element {
             <div className="extension-guidance">
               <ShieldCheck />
               <div>
-                <strong>Manifests stay workspace-scoped</strong>
-                <p>Nothing activates until you grant its declared permissions.</p>
+                <strong>Manifest preview only</strong>
+                <p>
+                  Cortex validates manifests and records preview grants. Extension code does not run
+                  in version 1.0.
+                </p>
               </div>
               <button type="button" disabled={!workspace} onClick={() => void openPluginFolder()}>
                 <FolderOpen />

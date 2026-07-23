@@ -75,7 +75,6 @@ describe('Align mutation tests', () => {
   });
 
   it('detects mismatched closing tag', () => {
-    const vehicles = fileOf(baseline, 'vehicles.meta');
     const mutated = mutate(baseline, 'vehicles.meta', (c) =>
       c.replace(/<txdName>([^<]*)<\/txdName>/, '<txdName>$1</textureName>'),
     );

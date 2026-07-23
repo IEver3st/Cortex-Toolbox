@@ -103,15 +103,7 @@ describe('preference migration', () => {
       editorFontSize: 13,
       experimentalTools: false,
       releaseBranch: 'developer',
-      installedModules: [
-        'sentinel',
-        'extensions',
-        'align',
-        'pulse',
-        'chevron',
-        'textures',
-        'chassis',
-      ],
+      installedModules: ['sentinel', 'extensions', 'align', 'pulse', 'chevron', 'chassis'],
     };
     const normalized = normalizePreferences(legacy);
     expect(preferenceSchema.strict().safeParse(normalized).success).toBe(true);
