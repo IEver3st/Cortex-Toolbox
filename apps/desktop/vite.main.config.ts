@@ -3,9 +3,9 @@ import { resolveChannel } from './src/shared/branding';
 
 export default defineConfig(({ mode }) => {
   const buildEnv = loadEnv(mode, import.meta.dirname, 'CORTEX_');
-  const githubOwner = process.env.CORTEX_GITHUB_OWNER ?? buildEnv.CORTEX_GITHUB_OWNER ?? 'IEver3st';
+  const githubOwner = process.env.CORTEX_GITHUB_OWNER ?? buildEnv.CORTEX_GITHUB_OWNER ?? '';
   const githubRepository =
-    process.env.CORTEX_GITHUB_REPOSITORY ?? buildEnv.CORTEX_GITHUB_REPOSITORY ?? 'CRT';
+    process.env.CORTEX_GITHUB_REPOSITORY ?? buildEnv.CORTEX_GITHUB_REPOSITORY ?? '';
   const channel = resolveChannel(
     process.env.CORTEX_RELEASE_CHANNEL ?? buildEnv.CORTEX_RELEASE_CHANNEL,
     'development',

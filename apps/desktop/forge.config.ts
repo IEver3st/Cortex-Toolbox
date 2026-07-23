@@ -1,8 +1,6 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { MakerDeb } from '@electron-forge/maker-deb';
-import { MakerRpm } from '@electron-forge/maker-rpm';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { CortexZipMaker } from './makers/zip-maker';
@@ -74,20 +72,6 @@ const config: ForgeConfig = {
               : {}),
           }
         : {}),
-    }),
-    new MakerDeb({
-      options: {
-        name: brand.executableName,
-        productName: brand.productName,
-        icon: `${iconPath}.png`,
-      },
-    }),
-    new MakerRpm({
-      options: {
-        name: brand.executableName,
-        productName: brand.productName,
-        icon: `${iconPath}.png`,
-      },
     }),
   ],
   hooks: {

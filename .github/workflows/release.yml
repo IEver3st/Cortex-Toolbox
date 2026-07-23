@@ -7,11 +7,7 @@ permissions:
   id-token: write
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -32,34 +28,30 @@ jobs:
           fi
       - name: Build icons
         run: pnpm icons
-      - name: Package installers
+      - name: Package Windows installer
         env:
           CORTEX_RELEASE_CHANNEL: ${{ steps.channel.outputs.name }}
-          CORTEX_GITHUB_OWNER: IEver3st
-          CORTEX_GITHUB_REPOSITORY: CRT
+          CORTEX_GITHUB_OWNER: ${{ github.repository_owner }}
+          CORTEX_GITHUB_REPOSITORY: ${{ github.event.repository.name }}
           CORTEX_ENABLE_AUTO_UPDATE: 'true'
+        shell: bash
         run: |
           if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then
             pnpm make:beta
           else
             pnpm make
           fi
-        shell: bash
       - uses: anchore/sbom-action@v0
         with:
           path: apps/desktop/out/make
           format: cyclonedx-json
-          output-file: apps/desktop/out/make/cortex-${{ runner.os }}.cdx.json
-      - name: Generate checksums (Windows)
-        if: runner.os == 'Windows'
+          output-file: apps/desktop/out/make/cortex-windows.cdx.json
+      - name: Generate checksums
         shell: pwsh
         run: Get-ChildItem apps/desktop/out/make -File -Recurse | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Replace((Resolve-Path .).Path + '\', ''))" } | Set-Content apps/desktop/out/make/SHA256SUMS-Windows.txt
-      - name: Generate checksums (Unix)
-        if: runner.os != 'Windows'
-        run: find apps/desktop/out/make -type f -print0 | sort -z | xargs -0 sha256sum > apps/desktop/out/make/SHA256SUMS-${{ runner.os }}.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: release-${{ steps.channel.outputs.name }}-${{ runner.os }}
+          name: release-${{ steps.channel.outputs.name }}-windows
           path: apps/desktop/out/make/**/*
           if-no-files-found: error
   publish:
@@ -86,5 +78,6 @@ jobs:
           prerelease: ${{ steps.meta.outputs.prerelease }}
           body: |
             Release channel: `${{ steps.meta.outputs.channel }}`.
+            Windows 10/11 installer build.
             Platform signing is applied only when repository signing credentials are configured.
             Artifacts without a platform signature are clearly considered unsigned development builds.

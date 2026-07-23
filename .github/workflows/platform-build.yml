@@ -14,13 +14,12 @@ permissions:
   contents: read
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     env:
       CORTEX_RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
+      CORTEX_GITHUB_OWNER: ${{ github.repository_owner }}
+      CORTEX_GITHUB_REPOSITORY: ${{ github.event.repository.name }}
+      CORTEX_ENABLE_AUTO_UPDATE: 'true'
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -29,16 +28,16 @@ jobs:
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm icons
-      - name: Package installers
+      - name: Package Windows installer
+        shell: bash
         run: |
           if [ "${CORTEX_RELEASE_CHANNEL}" = "beta" ]; then
             pnpm make:beta
           else
             pnpm make
           fi
-        shell: bash
       - uses: actions/upload-artifact@v4
         with:
-          name: cortex-${{ env.CORTEX_RELEASE_CHANNEL }}-${{ runner.os }}-unsigned
+          name: cortex-${{ env.CORTEX_RELEASE_CHANNEL }}-windows-unsigned
           path: apps/desktop/out/make/**/*
           if-no-files-found: error

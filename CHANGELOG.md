@@ -23,4 +23,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Safe file writes through reviewed change plans with SHA-256 verification.
 - Diagnostics and report text redact tokens, passwords, and secrets before submission.
 
-[1.0.0]: https://github.com/IEver3st/CRT/releases/tag/v1.0.0
+[1.0.0]: releases/tag/v1.0.0

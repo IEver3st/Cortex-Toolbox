@@ -16,7 +16,7 @@ describe('update integrity', () => {
   it('accepts only HTTPS GitHub release asset URLs', () => {
     expect(() =>
       assertTrustedGitHubAssetUrl(
-        'https://github.com/IEver3st/CRT/releases/download/v1.0.0/CortexToolBoxSetup.exe',
+        'https://github.com/example-owner/example-repo/releases/download/v1.0.0/CortexToolBoxSetup.exe',
       ),
     ).not.toThrow();
     expect(() => assertTrustedGitHubAssetUrl('http://github.com/example.exe')).toThrow(

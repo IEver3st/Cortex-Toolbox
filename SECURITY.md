@@ -10,7 +10,7 @@
 
 Please report security issues privately instead of opening a public GitHub issue.
 
-1. Open a [private security advisory](https://github.com/IEver3st/CRT/security/advisories/new) on this repository.
+1. Open a [private security advisory](/security/advisories/new) on this repository.
 2. Include a clear description, affected versions, reproduction steps, and impact.
 3. Redact secrets, private resource files, and personal paths from any attachments.
 

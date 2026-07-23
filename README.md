@@ -187,7 +187,7 @@ Cortex supports three release channels:
 
 Windows packaged builds can check GitHub releases when enabled via `CORTEX_ENABLE_AUTO_UPDATE`. Cortex downloads the Squirrel installer, verifies it against the release's published SHA-256 checksum, and then offers to open it. Auto-update controls live in Settings > About, and the Activity Rail shows download or install actions as the update advances.
 
-In-app updates are disabled on macOS and Linux in version 1.0. Those platforms receive release artifacts but must install updates manually.
+Cortex ToolBox targets **Windows 10 and Windows 11** only.
 
 ---
 
@@ -276,7 +276,7 @@ pnpm make        # stable
 pnpm make:beta   # beta
 ```
 
-The current makers produce Windows Squirrel setup/ZIP/NUPKG artifacts, a macOS ZIP, and Linux ZIP/DEB/RPM artifacts. DMG and AppImage packages are not produced in version 1.0.
+The current makers produce Windows Squirrel setup, ZIP, and NUPKG artifacts for Windows 10/11.
 
 ### Quality commands
 
@@ -291,11 +291,11 @@ pnpm icons       # Regenerate application icons from source assets
 
 ### Environment overrides
 
-Copy `apps/desktop/.env.example` to `apps/desktop/.env.local` to configure logging, release channel, the GitHub update repository, an optional report token, the optional YTD tool path, and archive size limits. `CORTEX_GITHUB_REPOSITORY` is the short repository name (`CRT`), not a GitHub URL. Never commit report tokens or bake them into public installers.
+Copy `apps/desktop/.env.example` to `apps/desktop/.env.local` to configure logging, release channel, the GitHub update repository, an optional report token, the optional YTD tool path, and archive size limits. `CORTEX_GITHUB_REPOSITORY` is the short repository name, not a GitHub URL. Never commit report tokens or bake them into public installers.
 
 ### Releasing
 
-Tagged pushes (`v*`) trigger the [Release workflow](.github/workflows/release.yml), which runs tests, packages installers for Windows/macOS/Linux, generates checksums and SBOMs, and publishes a GitHub release. Beta tags should include `beta` in the tag name (for example `v0.2.0-beta.1`).
+Tagged pushes (`v*`) trigger the [Release workflow](.github/workflows/release.yml), which runs tests, packages the Windows installer, generates checksums and an SBOM, and publishes a GitHub release. Beta tags should include `beta` in the tag name (for example `v1.1.0-beta.1`).
 
 ---
 
