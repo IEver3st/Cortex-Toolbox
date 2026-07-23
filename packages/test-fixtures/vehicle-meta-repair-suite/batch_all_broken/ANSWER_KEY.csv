@@ -1,0 +1,21 @@
+file,bad_line,error_family,category,expected_title_pattern,expected_value_or_fix,notes
+carcols_nomad.meta,28,xml-syntax,xml-syntax,Unclosed attribute quote,0xFFFF6A00",malformed XML
+carcols_scout.meta,6,xml-syntax,xml-syntax,self-closing,value="2000" />,malformed XML
+carcols_viper.meta,5,xml-syntax,xml-syntax,Mismatched closing,kitName,malformed XML
+carcols_warden.meta,7,enum,value,kit type,MKT_STANDARD,well-formed semantic
+carvariations_nomad.meta,5,cross-file-model,cross-file,model,cortex_nomad,model typo; modkit must not be false-positive missing
+carvariations_scout.meta,21,cross-file-modkit,cross-file,modkit,2000_cortex_scout_modkit,kit typo despite carcols_scout malformed
+carvariations_viper.meta,16,boolean,value,boolean,true,truee invalid boolean
+carvariations_warden.meta,5,xml-syntax,xml-syntax,Closing tag missing,</modelName>,malformed XML
+handling_nomad.meta,11,range,value,out of range|Drive bias|fDriveBiasFront,1.000000,drive bias > 1.0
+handling_scout.meta,13,numeric,value,Invalid numeric|fInitialDriveForce,0.300000,0.315000f not a finite float
+handling_viper.meta,6,xml-syntax,xml-syntax,Unclosed attribute quote,1325.000000",malformed XML
+handling_warden.meta,6,range,value,out of range|Mass|fMass,,negative mass
+vehiclelayouts_nomad.meta,12,cross-file-seat,cross-file,ShuffleLink,,missing seat; may be manual
+vehiclelayouts_scout.meta,7,cross-file-seat,cross-file,ShuffleLink,SEAT_SCOUT_PASSENGER,PASSNGER typo
+vehiclelayouts_viper.meta,17,xml-syntax,xml-syntax,ampersand,&amp;,malformed XML
+vehiclelayouts_warden.meta,10,uniqueness,duplicate-id,Duplicate seat,SEAT_WARDEN_PASSENGER,duplicate SEAT_WARDEN_DRIVER
+vehicles_nomad.meta,51,enum,value,plate type,VPT_FRONT_AND_BACK_PLATES,missing trailing S
+vehicles_scout.meta,9,cross-file-handling,cross-file,handling,CORTEX_SCOUT,CORTEX_SCOT typo
+vehicles_viper.meta,53,enum,value,vehicle class,VC_SUPER,VC_SUER typo
+vehicles_warden.meta,18,cross-file-layout,cross-file,layout,LAYOUT_CORTEX_WARDEN,WARDN typo

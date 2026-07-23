@@ -13,8 +13,9 @@ import {
   SIREN_CHANNEL_COUNT,
   serializeSirenPattern,
 } from './index';
+import { repairSuiteRoot } from './repair-suite-root';
 
-const SUITE_ROOT = path.resolve('C:/Users/User/Desktop/FiveM_Vehicle_Meta_Repair_Test_Suite');
+const SUITE_ROOT = repairSuiteRoot();
 
 function readMetaFiles(dir: string): { name: string; content: string }[] {
   return readdirSync(dir)

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleMetadata>
+  <SeatInfos>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_VIPER_DRIVER</Name>
+      <SeatBoneName>seat_dside_f</SeatBoneName>
+      <ShuffleLink>SEAT_VIPER_PASSENGER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_VIPER_PASSENGER</Name>
+      <SeatBoneName>seat_pside_f</SeatBoneName>
+      <ShuffleLink>SEAT_VIPER_DRIVER</ShuffleLink>
+    </Item>
+  </SeatInfos>
+  <SeatAnimInfos>
+    <Item type="CVehicleSeatAnimInfo">
+      <Name>Cortex Viper Driver & Passenger</Name>
+      <DriveByInfo>DRIVEBY_STANDARD_FRONT_LEFT</DriveByInfo>
+    </Item>
+  </SeatAnimInfos>
+  <VehicleLayouts>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_VIPER</Name>
+      <Seats>
+        <Item>SEAT_VIPER_DRIVER</Item>
+        <Item>SEAT_VIPER_PASSENGER</Item>
+      </Seats>
+    </Item>
+  </VehicleLayouts>
+</CVehicleMetadata>

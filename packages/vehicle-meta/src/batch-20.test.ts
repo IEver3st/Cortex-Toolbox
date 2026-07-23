@@ -16,8 +16,9 @@ import {
   type MetaFileInput,
   type MetaFinding,
 } from './index';
+import { repairSuiteRoot } from './repair-suite-root';
 
-const SUITE_ROOT = path.resolve('C:/Users/User/Desktop/FiveM_Vehicle_Meta_Repair_Test_Suite');
+const SUITE_ROOT = repairSuiteRoot();
 const BATCH_DIR = path.join(SUITE_ROOT, 'batch_all_broken');
 const ANSWER_KEY_PATH = path.join(BATCH_DIR, 'ANSWER_KEY.csv');
 

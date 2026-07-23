@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleMetadata>
+  <SeatInfos>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_ATLAS_DRIVER</Name>
+      <SeatBoneName>seat_dside_f</SeatBoneName>
+      <ShuffleLink>SEAT_ATLAS_PASSENGER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_ATLAS_DRIVER</Name>
+      <SeatBoneName>seat_pside_f</SeatBoneName>
+      <ShuffleLink>SEAT_ATLAS_DRIVER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_ATLAS_REAR</Name>
+      <SeatBoneName>seat_dside_r</SeatBoneName>
+      <ShuffleLink>SEAT_ATLAS_PASSENGER</ShuffleLink>
+    </Item>
+  </SeatInfos>
+  <SeatAnimInfos>
+    <Item type="CVehicleSeatAnimInfo">
+      <Name>Cortex Atlas Driver</Name>
+      <DriveByInfo>DRIVEBY_STANDARD_FRONT_LEFT</DriveByInfo>
+    </Item>
+  </SeatAnimInfos>
+  <VehicleLayouts>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_ATLAS</Name>
+      <Seats>
+        <Item>SEAT_ATLAS_DRIVER</Item>
+        <Item>SEAT_ATLAS_PASSENGER</Item>
+      </Seats>
+    </Item>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_ATLAS_REAR</Name>
+      <Seats>
+        <Item>SEAT_ATLAS_REAR</Item>
+      </Seats>
+    </Item>
+  </VehicleLayouts>
+</CVehicleMetadata>

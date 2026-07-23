@@ -1,0 +1,9 @@
+case,file,bad_line,error_type,expected_fix
+01_carcols_missing_self_close,carcols.meta,6,XML syntax,"Change <id value=""1000""> to <id value=""1000"" />."
+02_carvariations_missing_closing_bracket,carvariations.meta,5,XML syntax,Add the missing > to the closing </modelName> tag.
+03_handling_unclosed_attribute_quote,handling.meta,6,XML syntax,"Close the value attribute quote: value=""1500.000000""."
+04_vehicles_mismatched_closing_tag,vehicles.meta,8,XML syntax,Replace </textureName> with </txdName>.
+05_vehiclelayouts_unescaped_ampersand,vehiclelayouts.meta,17,XML syntax,Escape the ampersand as &amp;.
+06_handling_invalid_numeric_value,handling.meta,13,Semantic/value,"Replace non-numeric value ""fast"" with a valid float such as ""0.300000""."
+07_vehicles_handling_id_mismatch,vehicles.meta,9,Cross-file reference,Change CORTEX_TSET to CORTEX_TEST so vehicles.meta matches handling.meta.
+08_carvariations_modkit_mismatch,carvariations.meta,15,Cross-file reference,Change 1001_cortex_test_modkit to 1000_cortex_test_modkit so it matches carcols.meta.

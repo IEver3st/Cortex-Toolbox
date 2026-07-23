@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleMetadata>
+  <SeatInfos>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_DUNE_DRIVER</Name>
+      <SeatBoneName></SeatBoneName>
+      <ShuffleLink>SEAT_DUNE_PASSENGER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_DUNE_PASSENGER</Name>
+      <SeatBoneName>seat_pside_f</SeatBoneName>
+      <ShuffleLink>SEAT_DUNE_DRIVER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_DUNE_REAR</Name>
+      <SeatBoneName>seat_dside_r</SeatBoneName>
+      <ShuffleLink>SEAT_DUNE_PASSENGER</ShuffleLink>
+    </Item>
+  </SeatInfos>
+  <SeatAnimInfos>
+    <Item type="CVehicleSeatAnimInfo">
+      <Name>Cortex Dune Driver</Name>
+      <DriveByInfo>DRIVEBY_STANDARD_FRONT_LEFT</DriveByInfo>
+    </Item>
+  </SeatAnimInfos>
+  <VehicleLayouts>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_DUNE</Name>
+      <Seats>
+        <Item>SEAT_DUNE_DRIVER</Item>
+        <Item>SEAT_DUNE_PASSENGER</Item>
+      </Seats>
+    </Item>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_DUNE_REAR</Name>
+      <Seats>
+        <Item>SEAT_DUNE_REAR</Item>
+      </Seats>
+    </Item>
+  </VehicleLayouts>
+</CVehicleMetadata>
