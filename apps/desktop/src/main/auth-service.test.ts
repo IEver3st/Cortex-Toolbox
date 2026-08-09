@@ -6,16 +6,16 @@ const mocks = vi.hoisted(() => {
   return {
     secrets,
     openExternal: vi.fn(() => Promise.resolve()),
-    authorization: vi.fn(() =>
-      Promise.resolve({
+    authorization: vi.fn((options?: { redirectUri: string }) => {
+      void options;
+      return Promise.resolve({
         url: 'https://api.workos.com/user_management/authorize',
         state: 'state-abcdefghijklmnopqrstuvwxyz',
         codeVerifier: 'verifier-abcdefghijklmnopqrstuvwxyz',
-      }),
-    ),
+      });
+    }),
     authenticateCode: vi.fn(),
     refresh: vi.fn(),
-    logoutUrl: vi.fn(() => 'https://api.workos.com/logout'),
   };
 });
 
@@ -30,7 +30,6 @@ vi.mock('@workos-inc/node', () => ({
       getAuthorizationUrlWithPKCE: mocks.authorization,
       authenticateWithCode: mocks.authenticateCode,
       authenticateWithRefreshToken: mocks.refresh,
-      getLogoutUrl: mocks.logoutUrl,
     },
   }),
 }));
@@ -54,6 +53,7 @@ const USER = {
   lastName: 'D',
   profilePictureUrl: null,
 };
+const GOOGLE_PROFILE_PICTURE = 'https://lh3.googleusercontent.com/a/cortex-test=s96-c';
 
 function env(overrides: Partial<MainEnv> = {}): MainEnv {
   return {
@@ -69,6 +69,7 @@ function env(overrides: Partial<MainEnv> = {}): MainEnv {
     CORTEX_MAX_ARCHIVE_SIZE_MB: 2048,
     CORTEX_MAX_IMPORT_FILE_SIZE_MB: 1024,
     CORTEX_WORKOS_CLIENT_ID: 'client_01',
+    CORTEX_WORKOS_CALLBACK_MODE: 'protocol',
     CORTEX_CLOUD_API_URL: '',
     ...overrides,
   };
@@ -103,6 +104,21 @@ describe('WorkOS native public-client session', () => {
     });
   });
 
+  it('completes loopback PKCE through a self-closing browser page', async () => {
+    const service = new CortexAuthService(env({ CORTEX_WORKOS_CALLBACK_MODE: 'loopback' }));
+    await service.beginSignIn();
+
+    const redirectUri = mocks.authorization.mock.calls.at(-1)?.[0]?.redirectUri;
+    if (!redirectUri) throw new Error('The loopback redirect URI was not generated.');
+    expect(redirectUri).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/auth\/callback$/);
+    const response = await fetch(
+      `${redirectUri}?code=code_01&state=state-abcdefghijklmnopqrstuvwxyz`,
+    );
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('window.close()');
+    expect((await service.status()).status).toBe('signed-in');
+  });
+
   it('rejects a callback whose OAuth state does not match', async () => {
     const service = new CortexAuthService(env());
     await service.beginSignIn();
@@ -133,7 +149,24 @@ describe('WorkOS native public-client session', () => {
     expect(JSON.stringify(status)).not.toContain('accessToken');
   });
 
-  it('rotates an expired refresh token and signs out through the WorkOS session', async () => {
+  it('keeps the Google profile picture from the WorkOS user in the signed-in identity', async () => {
+    mocks.authenticateCode.mockResolvedValue({
+      accessToken: token({ exp: 4_000_000_000, sid: 'session_01' }),
+      refreshToken: 'refresh_01',
+      user: { ...USER, profilePictureUrl: GOOGLE_PROFILE_PICTURE },
+    });
+    const service = new CortexAuthService(env());
+    await service.beginSignIn();
+    await service.handleCallback(
+      'cortex-toolbox://auth/callback?code=code_01&state=state-abcdefghijklmnopqrstuvwxyz',
+    );
+
+    const status = await service.status();
+    expect(status.identity?.avatarUrl).toBe(GOOGLE_PROFILE_PICTURE);
+    expect(mocks.secrets.get('workos-session')).toContain(GOOGLE_PROFILE_PICTURE);
+  });
+
+  it('rotates an expired refresh token and signs out locally without opening a browser', async () => {
     mocks.secrets.set(
       'workos-session',
       JSON.stringify({
@@ -156,7 +189,7 @@ describe('WorkOS native public-client session', () => {
     });
     expect(mocks.secrets.get('workos-session')).toContain('refresh_new');
     await service.signOut();
-    expect(mocks.logoutUrl).toHaveBeenCalledWith({ sessionId: 'session_new' });
+    expect(mocks.openExternal).not.toHaveBeenCalled();
     expect(mocks.secrets.has('workos-session')).toBe(false);
   });
 });

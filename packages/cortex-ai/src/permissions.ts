@@ -5,6 +5,7 @@ export type AiWorkspaceOperation = 'inspect' | 'propose-change' | 'apply-change'
 export interface AiPermissionDecision {
   allowed: boolean;
   requiresConfirmation: boolean;
+  autoApply: boolean;
   reason: string;
 }
 
@@ -16,6 +17,7 @@ export function decideAiPermission(
     return {
       allowed: true,
       requiresConfirmation: false,
+      autoApply: false,
       reason: 'Workspace inspection is allowed.',
     };
   }
@@ -23,6 +25,7 @@ export function decideAiPermission(
     return {
       allowed: true,
       requiresConfirmation: true,
+      autoApply: false,
       reason: 'Destructive changes always require explicit confirmation.',
     };
   }
@@ -30,6 +33,7 @@ export function decideAiPermission(
     return {
       allowed: false,
       requiresConfirmation: false,
+      autoApply: false,
       reason: 'Workspace access is read only.',
     };
   }
@@ -37,18 +41,32 @@ export function decideAiPermission(
     return {
       allowed: true,
       requiresConfirmation: false,
+      autoApply: false,
       reason: 'The AI may prepare a reviewable proposal.',
     };
   }
-  return access === 'allow-session'
+  return access === 'ask-before-changes'
     ? {
         allowed: true,
-        requiresConfirmation: false,
-        reason: 'Low-risk edits are allowed for this workspace session.',
-      }
-    : {
-        allowed: true,
         requiresConfirmation: true,
+        autoApply: false,
         reason: 'Applying changes requires user approval.',
-      };
+      }
+    : access === 'approve-safe-edits'
+      ? {
+          allowed: true,
+          requiresConfirmation: false,
+          autoApply: false,
+          reason: 'Eligible safe edits are allowed for the active workspace.',
+        }
+      : {
+          allowed: true,
+          requiresConfirmation: false,
+          autoApply: true,
+          reason: 'Eligible changes may be applied automatically inside the active workspace.',
+        };
+}
+
+export function shouldAutoApplyAiProposal(access: AiWorkspaceAccess): boolean {
+  return decideAiPermission(access, 'apply-change').autoApply;
 }

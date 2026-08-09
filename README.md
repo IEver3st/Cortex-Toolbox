@@ -67,27 +67,27 @@ Open workspace
 
 ### Development workflow
 
-| Module | Purpose |
-|---|---|
-| **Index** | Parse and safely edit `fxmanifest.lua` and legacy `__resource.lua` files |
-| **Sentinel** | Audit manifests, paths, secrets, asset hygiene and release risks |
-| **Probe** | Analyse Lua, JavaScript and TypeScript without executing project code |
-| **Wire** | Explore functions, events, exports, commands and caller relationships |
-| **Bundle** | Build a clean ZIP package behind a release-validation gate |
+| Module       | Purpose                                                                  |
+| ------------ | ------------------------------------------------------------------------ |
+| **Index**    | Parse and safely edit `fxmanifest.lua` and legacy `__resource.lua` files |
+| **Sentinel** | Audit manifests, paths, secrets, asset hygiene and release risks         |
+| **Probe**    | Analyse Lua, JavaScript and TypeScript without executing project code    |
+| **Wire**     | Explore functions, events, exports, commands and caller relationships    |
+| **Bundle**   | Build a clean ZIP package behind a release-validation gate               |
 
 ### Vehicle and creative tools
 
-| Module | Purpose |
-|---|---|
-| **Chassis** | Generate, import, edit and validate complete vehicle metadata bundles |
-| **Align** | Diagnose and repair model names, siren IDs, light IDs and modkit bindings |
-| **Pulse** | Design 24-channel, 32-step siren patterns with live playback |
-| **Chevron Builder** | Create mirrored emergency and fleet warning panels with PNG export |
+| Module              | Purpose                                                                   |
+| ------------------- | ------------------------------------------------------------------------- |
+| **Chassis**         | Generate, import, edit and validate complete vehicle metadata bundles     |
+| **Align**           | Diagnose and repair model names, siren IDs, light IDs and modkit bindings |
+| **Pulse**           | Design 24-channel, 32-step siren patterns with live playback              |
+| **Chevron Builder** | Create mirrored emergency and fleet warning panels with PNG export        |
 
 ### Experimental systems
 
-| Module | Purpose |
-|---|---|
+| Module         | Purpose                                                                             |
+| -------------- | ----------------------------------------------------------------------------------- |
 | **Extensions** | Inspect plugin manifests and requested permissions without executing extension code |
 
 Experimental Extensions support in version 1.0 is intentionally limited to inspection and permission review. Workspace, archive, external-tool and network access are not exposed to extension code.
@@ -304,11 +304,11 @@ Preferences are stored locally and normalised when loaded so older settings can 
 
 Cortex supports three channels:
 
-| Channel | Purpose |
-|---|---|
-| `stable` | Normal public releases |
-| `beta` | Pre-release builds with a separate app identity and installer |
-| `development` | Local development builds with updates disabled |
+| Channel       | Purpose                                                       |
+| ------------- | ------------------------------------------------------------- |
+| `stable`      | Normal public releases                                        |
+| `beta`        | Pre-release builds with a separate app identity and installer |
+| `development` | Local development builds with updates disabled                |
 
 Packaged Windows builds can check GitHub Releases when updating is enabled. Cortex downloads the Squirrel installer, checks it against the release's published SHA-256 checksum and asks before opening it.
 
@@ -349,20 +349,20 @@ Cortex-Toolbox/
 
 ### Desktop stack
 
-| Layer | Technology |
-|---|---|
-| Desktop runtime | Electron 43 |
-| Frontend | React 19 and TypeScript |
-| Routing | React Router |
-| State | Zustand and TanStack Query |
-| Editor | CodeMirror 6 |
-| Interface primitives | Radix UI |
-| Styling | Tailwind CSS 4 and CSS custom properties |
-| Notifications | Sonner |
-| Unit testing | Vitest |
-| End-to-end testing | Playwright |
-| Packaging | Electron Forge and Squirrel |
-| Monorepo | pnpm workspaces |
+| Layer                | Technology                               |
+| -------------------- | ---------------------------------------- |
+| Desktop runtime      | Electron 43                              |
+| Frontend             | React 19 and TypeScript                  |
+| Routing              | React Router                             |
+| State                | Zustand and TanStack Query               |
+| Editor               | CodeMirror 6                             |
+| Interface primitives | Radix UI                                 |
+| Styling              | Tailwind CSS 4 and CSS custom properties |
+| Notifications        | Sonner                                   |
+| Unit testing         | Vitest                                   |
+| End-to-end testing   | Playwright                               |
+| Packaging            | Electron Forge and Squirrel              |
+| Monorepo             | pnpm workspaces                          |
 
 ## Development
 

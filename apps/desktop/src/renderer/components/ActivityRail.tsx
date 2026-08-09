@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { BrainCircuit, Home, PackageCheck, Settings, Download } from 'lucide-react';
+import { BrainCircuit, Download, Home, PackageCheck, Settings, X } from 'lucide-react';
 import { m } from 'motion/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ModuleId } from '../../shared/modules';
 import { MODULE_BY_ID } from '../../shared/modules';
 import { iconInteraction, useReducedMotion } from '../lib/motion';
@@ -100,6 +100,13 @@ export function ActivityRail(): React.JSX.Element {
   const updates = useUpdateStatus();
   const updateActionable = updates.data?.phase === 'available' || updates.data?.phase === 'ready';
   const updateReady = updates.data?.phase === 'ready';
+  const [dismissedUpdateKey, setDismissedUpdateKey] = useState<string | null>(null);
+  const updateNoticeKey = updates.data?.availableVersion
+    ? `version:${updates.data.availableVersion}`
+    : (updates.data?.phase ?? null);
+  const updateDismissed = updateNoticeKey !== null && dismissedUpdateKey === updateNoticeKey;
+  const updateNoticeVisible = updateActionable && !updateDismissed;
+  const updateNoticeLabel = 'Update Available';
 
   const runUpdateAction = async () => {
     try {
@@ -195,6 +202,34 @@ export function ActivityRail(): React.JSX.Element {
         )}
       </div>
 
+      {updateNoticeVisible && !sidebarCollapsed ? (
+        <div className="sidebar-update-notice" role="status" aria-live="polite">
+          <button
+            type="button"
+            className="sidebar-update-action"
+            onClick={() => void runUpdateAction()}
+            aria-label={
+              updates.data?.availableVersion
+                ? `${updateReady ? 'Install' : 'Download'} version ${updates.data.availableVersion}`
+                : updateReady
+                  ? 'Install update'
+                  : 'Download update'
+            }
+          >
+            <Download aria-hidden="true" />
+            <span>{updateNoticeLabel}</span>
+          </button>
+          <button
+            type="button"
+            className="sidebar-update-dismiss"
+            onClick={() => setDismissedUpdateKey(updateNoticeKey)}
+            aria-label="Dismiss update notice"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+
       <div className="sidebar-footer">
         {experimental && systemModules.length > 0 ? (
           <div className="sidebar-footer-extras">
@@ -236,7 +271,7 @@ export function ActivityRail(): React.JSX.Element {
               <Settings aria-hidden="true" />
             </m.button>
           </Tooltip>
-          {updateActionable ? (
+          {updateNoticeVisible && sidebarCollapsed ? (
             <Tooltip
               content={
                 updates.data?.availableVersion
@@ -245,7 +280,7 @@ export function ActivityRail(): React.JSX.Element {
                     ? 'Install update'
                     : 'Download update'
               }
-              side={sidebarCollapsed ? 'right' : 'top'}
+              side="right"
             >
               <m.button
                 type="button"
@@ -260,11 +295,7 @@ export function ActivityRail(): React.JSX.Element {
                 }
                 {...iconInteraction(reduced)}
               >
-                {updateReady ? (
-                  <PackageCheck aria-hidden="true" />
-                ) : (
-                  <Download aria-hidden="true" />
-                )}
+                <Download aria-hidden="true" />
               </m.button>
             </Tooltip>
           ) : null}

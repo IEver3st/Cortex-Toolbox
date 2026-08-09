@@ -2,6 +2,18 @@ name = "cortex-cloud"
 main = "src/index.ts"
 compatibility_date = "2026-08-08"
 
+[vars]
+WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID"
+WORKOS_ISSUER = "https://api.workos.com/"
+STRIPE_CREATOR_MONTHLY_PRICE_ID = "price_1U2PuXQqaHP22wnxni38nsWc"
+STRIPE_CREATOR_ANNUAL_PRICE_ID = "price_1U2PueQqaHP22wnxROZLdlkX"
+STRIPE_PRO_MONTHLY_PRICE_ID = "price_1U2PulQqaHP22wnxUhu72m9y"
+STRIPE_PRO_ANNUAL_PRICE_ID = "price_1U2PurQqaHP22wnxp58We6AZ"
+BILLING_RETURN_URL = "REPLACE_WITH_HTTPS_RETURN_URL"
+CORTEX_AI_ENABLED = "true"
+AI_PROVIDER_ENABLED = "true"
+STRIPE_RECONCILE_AFTER_SECONDS = "900"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "cortex-cloud"

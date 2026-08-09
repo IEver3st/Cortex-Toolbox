@@ -74,6 +74,9 @@ importers:
 
   apps/cortex-cloud:
     dependencies:
+      '@cortex/ai':
+        specifier: workspace:*
+        version: link:../../packages/cortex-ai
       hono:
         specifier: 4.13.1
         version: 4.13.1

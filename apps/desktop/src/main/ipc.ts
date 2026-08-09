@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { access, constants, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import {
   app,
@@ -34,6 +35,7 @@ import { pluginPermissionSchema } from '@cortex/plugin-sdk';
 import fg from 'fast-glob';
 import {
   channels,
+  CURRENT_ONBOARDING_VERSION,
   DEFAULT_PREFERENCES,
   ipcDefinitions,
   normalizePreferences,
@@ -59,6 +61,7 @@ import { CortexAiService } from './ai/ai-service';
 import { resolveAiWorkspaceFile } from './ai/workspace-sandbox';
 import type { CortexAuthService } from './auth-service';
 import { applyTextWriteTransaction } from './ai/write-transaction';
+import { removeLegacyAiCredential } from './ai/secure-storage';
 
 const workspace = new WorkspaceService();
 const jobs = new JobQueue();
@@ -208,6 +211,20 @@ interface RecentWorkspace {
   openedAt: string;
 }
 
+const settingsFilePath = path.join(app.getPath('userData'), 'config.json');
+const settingsExistedAtStartup = existsSync(settingsFilePath);
+let settingsHadOnboardingVersion = false;
+if (settingsExistedAtStartup) {
+  try {
+    const raw = JSON.parse(readFileSync(settingsFilePath, 'utf8')) as {
+      preferences?: Record<string, unknown>;
+    };
+    settingsHadOnboardingVersion = Object.hasOwn(raw.preferences ?? {}, 'onboardingVersion');
+  } catch {
+    // A malformed store is repaired by readPreferences below.
+  }
+}
+
 const settings = new Store<{
   preferences: Preferences;
   pluginGrants: Record<string, string[]>;
@@ -221,7 +238,6 @@ const settings = new Store<{
 });
 
 let updates: UpdateService | null = null;
-let aiSessionAccessRoot: string | null = null;
 
 export function getUpdateService(): UpdateService | null {
   return updates;
@@ -230,20 +246,19 @@ export function getUpdateService(): UpdateService | null {
 export function readPreferences(): Preferences {
   try {
     const stored = settings.get('preferences');
-    const normalized = normalizePreferences(stored);
-    // Session-level AI write access is intentionally never durable. Repair any
-    // older persisted value and overlay it only while the same workspace remains open.
-    const value =
-      normalized.aiWorkspaceAccess === 'allow-session'
-        ? { ...normalized, aiWorkspaceAccess: 'ask-before-changes' as const }
-        : normalized;
+    const value = normalizePreferences({
+      ...stored,
+      onboardingVersion: settingsHadOnboardingVersion
+        ? stored.onboardingVersion
+        : settingsExistedAtStartup
+          ? CURRENT_ONBOARDING_VERSION
+          : 0,
+    });
     // Repair the on-disk store when keys are missing or invalid so future reads stay clean.
     if (JSON.stringify(stored) !== JSON.stringify(value)) {
       settings.set('preferences', value);
     }
-    return aiSessionAccessRoot && workspace.current()?.root === aiSessionAccessRoot
-      ? { ...value, aiWorkspaceAccess: 'allow-session' }
-      : value;
+    return value;
   } catch {
     try {
       settings.set('preferences', { ...DEFAULT_PREFERENCES });
@@ -452,6 +467,7 @@ export function registerIpc(
   diagnostics: DiagnosticsService,
   cortexAuth: CortexAuthService,
 ): void {
+  removeLegacyAiCredential();
   updates = new UpdateService(env, readPreferences);
   const bugReports = new GitHubBugReportService(env, diagnostics, () => ({
     appVersion: app.getVersion(),
@@ -474,6 +490,7 @@ export function registerIpc(
       rememberPendingPlan(plan, active.root, resolved.relativePath, source);
       return plan.id;
     },
+    (planIds) => applyPendingTextPlans(planIds),
     () => cortexAuth.accessToken(),
     env.CORTEX_CLOUD_API_URL,
   );
@@ -552,7 +569,7 @@ export function registerIpc(
   );
   register(channels.projectsCurrent, () => ok(workspace.current()));
   register(channels.projectsClose, () => {
-    aiSessionAccessRoot = null;
+    pendingPlans.clear();
     workspace.close();
     return ok(null);
   });
@@ -981,56 +998,17 @@ export function registerIpc(
   register(channels.jobsList, () => ok(jobs.list()));
   register(channels.jobsCancel, (_event, request) => ok(jobs.cancel(request.id)));
   register(channels.settingsGet, () => ok(readPreferences()));
-  register(channels.settingsSet, (event, request) => {
+  register(channels.settingsSet, (_event, request) => {
     try {
       const value = normalizePreferences(request);
-      if (value.aiWorkspaceAccess === 'allow-session') {
-        const active = workspace.current();
-        if (!active) throw new Error('Open a workspace before granting session edit access.');
-        aiSessionAccessRoot = active.root;
-      } else {
-        aiSessionAccessRoot = null;
-      }
-      const durable = {
-        ...value,
-        aiWorkspaceAccess:
-          value.aiWorkspaceAccess === 'allow-session'
-            ? ('ask-before-changes' as const)
-            : value.aiWorkspaceAccess,
-      };
-      settings.set('preferences', durable);
-      applyReleaseBranchBranding(durable);
+      settings.set('preferences', value);
+      settingsHadOnboardingVersion = true;
+      applyReleaseBranchBranding(value);
       return ok(value);
     } catch (error: unknown) {
       return fail(fromUnknown(error, 'SETTINGS_WRITE_FAILED'));
     }
   });
-  register(
-    channels.aiModels,
-    () => guarded(() => cortexAi.models(), 'AI_MODELS_FAILED') as Promise<IpcResponse<'ai:models'>>,
-  );
-  register(channels.aiCredentialStatus, () => ok(cortexAi.credentialStatus()));
-  register(channels.aiCredentialSet, (_event, request) => {
-    try {
-      return ok(cortexAi.setCredential(request.apiKey));
-    } catch (error) {
-      return fail(fromUnknown(error, 'AI_CREDENTIAL_WRITE_FAILED'));
-    }
-  });
-  register(channels.aiCredentialRemove, () => {
-    try {
-      return ok(cortexAi.removeCredential());
-    } catch (error) {
-      return fail(fromUnknown(error, 'AI_CREDENTIAL_REMOVE_FAILED'));
-    }
-  });
-  register(
-    channels.aiProviderTest,
-    () =>
-      guarded(() => cortexAi.testProvider(), 'AI_PROVIDER_TEST_FAILED') as Promise<
-        IpcResponse<'ai:provider-test'>
-      >,
-  );
   register(channels.aiChatStart, (event, request) => {
     try {
       return ok({ runId: cortexAi.start(request, event.sender) });
@@ -1080,7 +1058,7 @@ export function registerIpc(
     channels.accountCheckout,
     (_event, request) =>
       guarded(async () => {
-        await cortexAuth.checkout(request.cadence);
+        await cortexAuth.checkout(request.plan, request.interval);
         return true;
       }, 'BILLING_CHECKOUT_FAILED') as Promise<IpcResponse<'account:checkout'>>,
   );

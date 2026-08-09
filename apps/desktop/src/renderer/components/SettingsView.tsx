@@ -100,7 +100,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         id: 'ai',
         label: 'AI',
         icon: Bot,
-        keywords: 'cortex openrouter model workspace access privacy',
+        keywords: 'cortex reasoning permissions workspace access privacy',
       },
     ],
   },
@@ -146,7 +146,7 @@ const TITLES: Record<SectionId, string> = {
   appearance: 'Appearance',
   editor: 'Editor',
   account: 'Account',
-  ai: 'AI',
+  ai: 'Cortex AI',
   modules: 'Modules',
   sidebar: 'Sidebar',
   accessibility: 'Accessibility',
@@ -172,12 +172,14 @@ function comparablePreferences(preferences: Preferences) {
 function SettingsGroup({
   title,
   children,
+  className,
 }: {
   title: string;
   children: ReactNode;
+  className?: string;
 }): React.JSX.Element {
   return (
-    <section className="settings-card">
+    <section className={`settings-card${className ? ` ${className}` : ''}`}>
       <h2 className="settings-card-title">{title}</h2>
       <div className="settings-card-body">{children}</div>
     </section>
@@ -380,7 +382,11 @@ export function SettingsView(): React.JSX.Element {
   const [pendingModuleId, setPendingModuleId] = useState<ModuleId | null>(null);
   const installedIds = useMemo(() => new Set(installed), [installed]);
   const query = usePreferences();
-  const [active, setActive] = useState<SectionId>('general');
+  const [active, setActive] = useState<SectionId>(() => {
+    const requested = globalThis.sessionStorage.getItem('cortex.settings.requestedSection');
+    globalThis.sessionStorage.removeItem('cortex.settings.requestedSection');
+    return requested === 'account' ? 'account' : 'general';
+  });
   const [search, setSearch] = useState('');
   const [draftOverride, setDraftOverride] = useState<Preferences | null>(null);
   const saveRevision = useRef(0);
@@ -398,6 +404,7 @@ export function SettingsView(): React.JSX.Element {
   const [updateBusy, setUpdateBusy] = useState(false);
   const updates = useUpdateStatus();
   const updateStatus = updates.data;
+  const installedVersion = updateStatus?.currentVersion ?? appBranding.version;
 
   useEffect(
     () => applyPreferencesToDocument({ ...draft, installedModules: installed }),
@@ -547,7 +554,9 @@ export function SettingsView(): React.JSX.Element {
         </nav>
       </aside>
 
-      <main className={`cursor-settings-main${active === 'appearance' ? ' is-theme-studio' : ''}`}>
+      <main
+        className={`cursor-settings-main${active === 'appearance' ? ' is-theme-studio' : ''}${active === 'about' ? ' is-about' : ''}${active === 'support' ? ' is-support' : ''}`}
+      >
         <SectionPageHost pageKey={active} className="cursor-settings-page-host" variant="settings">
           {active !== 'appearance' ? (
             <header className="cursor-settings-main-header">
@@ -575,53 +584,66 @@ export function SettingsView(): React.JSX.Element {
             ) : null}
 
             {active === 'general' ? (
-              <SettingsGroup title="Interface">
-                <Row
-                  label="Interface scale"
-                  description="Scale navigation, controls, and workspace content together."
-                  htmlFor="interface-scale"
-                  control={
-                    <Select
-                      id="interface-scale"
-                      value={String(draft.interfaceScale)}
-                      options={[0.85, 0.9, 1, 1.1, 1.2, 1.3].map((value) => ({
-                        value: String(value),
-                        label: `${Math.round(value * 100)}%`,
-                      }))}
-                      onChange={(value) => update('interfaceScale', Number(value))}
-                    />
-                  }
-                />
-                <Row
-                  label="UI font size"
-                  description="Set the base interface text size without changing code."
-                  htmlFor="ui-font-size"
-                  control={
-                    <Select
-                      id="ui-font-size"
-                      value={String(draft.uiFontSize)}
-                      options={[13, 14, 15, 16, 17, 18].map((value) => ({
-                        value: String(value),
-                        label: `${value}px`,
-                      }))}
-                      onChange={(value) => update('uiFontSize', Number(value))}
-                    />
-                  }
-                />
-                <Row
-                  label="Pointer cursors"
-                  description="Use a pointer cursor on interactive controls."
-                  htmlFor="pointer-cursor"
-                  control={
-                    <Toggle
-                      id="pointer-cursor"
-                      name="pointerCursor"
-                      checked={draft.pointerCursor}
-                      onChange={(value) => update('pointerCursor', value)}
-                    />
-                  }
-                />
-              </SettingsGroup>
+              <>
+                <SettingsGroup title="Interface">
+                  <Row
+                    label="Interface scale"
+                    description="Scale navigation, controls, and workspace content together."
+                    htmlFor="interface-scale"
+                    control={
+                      <Select
+                        id="interface-scale"
+                        value={String(draft.interfaceScale)}
+                        options={[0.85, 0.9, 1, 1.1, 1.2, 1.3].map((value) => ({
+                          value: String(value),
+                          label: `${Math.round(value * 100)}%`,
+                        }))}
+                        onChange={(value) => update('interfaceScale', Number(value))}
+                      />
+                    }
+                  />
+                  <Row
+                    label="UI font size"
+                    description="Set the base interface text size without changing code."
+                    htmlFor="ui-font-size"
+                    control={
+                      <Select
+                        id="ui-font-size"
+                        value={String(draft.uiFontSize)}
+                        options={[13, 14, 15, 16, 17, 18].map((value) => ({
+                          value: String(value),
+                          label: `${value}px`,
+                        }))}
+                        onChange={(value) => update('uiFontSize', Number(value))}
+                      />
+                    }
+                  />
+                  <Row
+                    label="Pointer cursors"
+                    description="Use a pointer cursor on interactive controls."
+                    htmlFor="pointer-cursor"
+                    control={
+                      <Toggle
+                        id="pointer-cursor"
+                        name="pointerCursor"
+                        checked={draft.pointerCursor}
+                        onChange={(value) => update('pointerCursor', value)}
+                      />
+                    }
+                  />
+                </SettingsGroup>
+                <SettingsGroup title="First-run setup">
+                  <Row
+                    label="Onboarding"
+                    description="Review appearance, Cortex AI, account, reasoning, and permission choices again."
+                    control={
+                      <button type="button" onClick={() => update('onboardingVersion', 0)}>
+                        Run onboarding again
+                      </button>
+                    }
+                  />
+                </SettingsGroup>
+              </>
             ) : null}
 
             {active === 'editor' ? (
@@ -661,6 +683,7 @@ export function SettingsView(): React.JSX.Element {
                 update={update}
                 SettingsGroup={SettingsGroup}
                 Row={Row}
+                onOpenAccount={() => setActive('account')}
               />
             ) : null}
 
@@ -760,20 +783,34 @@ export function SettingsView(): React.JSX.Element {
 
             {active === 'about' ? (
               <>
-                <SettingsGroup title="Application">
-                  <div className="about-settings-row">
-                    <CortexMark size="large" />
-                    <div>
-                      <h3>{appBranding.productName}</h3>
-                      <p>Free tools for people who make things.</p>
-                      <small>
-                        Version {updateStatus?.currentVersion ?? appBranding.version} ·{' '}
-                        {appBranding.channel} channel · GPL-3.0
-                      </small>
+                <SettingsGroup title="Application" className="about-application-card">
+                  <div className="about-application">
+                    <div className="about-identity-row">
+                      <div className="about-identity-mark">
+                        <CortexMark size="large" />
+                      </div>
+                      <div className="about-identity-copy">
+                        <h3>{appBranding.productName}</h3>
+                        <p>Free tools for people who make things.</p>
+                      </div>
                     </div>
+                    <dl className="about-facts">
+                      <div>
+                        <dt>Version</dt>
+                        <dd>v{installedVersion}</dd>
+                      </div>
+                      <div>
+                        <dt>Channel</dt>
+                        <dd>{appBranding.channel}</dd>
+                      </div>
+                      <div>
+                        <dt>License</dt>
+                        <dd>GPL-3.0</dd>
+                      </div>
+                    </dl>
                   </div>
                 </SettingsGroup>
-                <SettingsGroup title="Updates">
+                <SettingsGroup title="Updates" className="about-updates-card">
                   <Row
                     label="Automatic updates"
                     description="Check for new releases in the background and download them when available."
@@ -804,19 +841,6 @@ export function SettingsView(): React.JSX.Element {
                     }
                   />
                   <ReleaseBranchPreview branch={draft.releaseBranch} />
-                  <Row
-                    label="Experimental tools"
-                    description="Show the Extensions manifest-discovery preview. Extension code does not run."
-                    htmlFor="experimental-tools"
-                    control={
-                      <Toggle
-                        id="experimental-tools"
-                        name="experimentalTools"
-                        checked={draft.experimentalTools}
-                        onChange={(value) => update('experimentalTools', value)}
-                      />
-                    }
-                  />
                   <UpdatesPanel
                     updateStatus={updateStatus}
                     releaseBranch={draft.releaseBranch}
@@ -835,10 +859,8 @@ export function SettingsView(): React.JSX.Element {
                     label="Cortex AI"
                     description={
                       draft.aiEnabled
-                        ? draft.aiProvider === 'openrouter'
-                          ? 'Requests are sent directly to OpenRouter using your encrypted key.'
-                          : 'Only requested context is sent to the Cortex AI service and selected provider.'
-                        : 'No workspace content is sent to AI providers.'
+                        ? 'Only requested context is sent to Cortex Cloud through protected workspace tools.'
+                        : 'No workspace content is sent to Cortex Cloud.'
                     }
                     status={draft.aiEnabled ? 'Enabled' : 'Disabled'}
                     statusTone={draft.aiEnabled ? 'muted' : 'success'}

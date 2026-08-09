@@ -94,11 +94,6 @@ const api: CortexApi = {
     set: (input) => invoke(channels.settingsSet, input),
   },
   ai: {
-    models: () => invoke(channels.aiModels, {}),
-    credentialStatus: () => invoke(channels.aiCredentialStatus, {}),
-    setCredential: (input) => invoke(channels.aiCredentialSet, input),
-    removeCredential: () => invoke(channels.aiCredentialRemove, {}),
-    testProvider: () => invoke(channels.aiProviderTest, {}),
     startChat: (input) => invoke(channels.aiChatStart, input),
     cancelChat: (input) => invoke(channels.aiChatCancel, input),
     planProposal: (input) => invoke(channels.aiPlanProposal, input),

@@ -1,13 +1,24 @@
 import { defineConfig, loadEnv } from 'vite';
 import { resolveChannel } from './src/shared/branding';
+import { readLocalEnv } from './src/main/config/env';
 
 export default defineConfig(({ mode }) => {
   const buildEnv = loadEnv(mode, import.meta.dirname, 'CORTEX_');
+  const localEnv = readLocalEnv();
   const githubOwner = process.env.CORTEX_GITHUB_OWNER ?? buildEnv.CORTEX_GITHUB_OWNER ?? '';
   const githubRepository =
     process.env.CORTEX_GITHUB_REPOSITORY ?? buildEnv.CORTEX_GITHUB_REPOSITORY ?? '';
   const workosClientId =
-    process.env.CORTEX_WORKOS_CLIENT_ID ?? buildEnv.CORTEX_WORKOS_CLIENT_ID ?? '';
+    process.env.CORTEX_WORKOS_CLIENT_ID ??
+    buildEnv.CORTEX_WORKOS_CLIENT_ID ??
+    localEnv.CORTEX_WORKOS_CLIENT_ID ??
+    localEnv.WORKOS_CLIENT_ID ??
+    '';
+  const workosCallbackMode =
+    process.env.CORTEX_WORKOS_CALLBACK_MODE ??
+    buildEnv.CORTEX_WORKOS_CALLBACK_MODE ??
+    localEnv.CORTEX_WORKOS_CALLBACK_MODE ??
+    'protocol';
   const cloudApiUrl = process.env.CORTEX_CLOUD_API_URL ?? buildEnv.CORTEX_CLOUD_API_URL ?? '';
   const channel = resolveChannel(
     process.env.CORTEX_RELEASE_CHANNEL ?? buildEnv.CORTEX_RELEASE_CHANNEL,
@@ -26,6 +37,7 @@ export default defineConfig(({ mode }) => {
       // These are public desktop-client coordinates, never credentials. WorkOS
       // public clients use PKCE and the hosted service still validates every JWT.
       __CORTEX_WORKOS_CLIENT_ID__: JSON.stringify(workosClientId),
+      __CORTEX_WORKOS_CALLBACK_MODE__: JSON.stringify(workosCallbackMode),
       __CORTEX_CLOUD_API_URL__: JSON.stringify(cloudApiUrl),
     },
     build: {

@@ -25,24 +25,24 @@ function fixture(available = true) {
 }
 
 describe('encrypted secret vault', () => {
-  it('stores credentials encrypted and returns only status without reading them', () => {
+  it('stores WorkOS state encrypted and returns it only through the main-process vault', () => {
     const { data, vault } = fixture();
-    vault.set('openrouter-api-key', 'sk-or-secret');
+    vault.set('workos-session', 'session-secret');
 
-    expect(vault.has('openrouter-api-key')).toBe(true);
-    expect(data.get('openrouter-api-key')).not.toContain('sk-or-secret');
-    expect(vault.get('openrouter-api-key')).toBe('sk-or-secret');
+    expect(vault.has('workos-session')).toBe(true);
+    expect(data.get('workos-session')).not.toContain('session-secret');
+    expect(vault.get('workos-session')).toBe('session-secret');
   });
 
   it('removes credentials', () => {
     const { vault } = fixture();
-    vault.set('openrouter-api-key', 'sk-or-secret');
-    vault.remove('openrouter-api-key');
-    expect(vault.has('openrouter-api-key')).toBe(false);
+    vault.set('workos-pkce', 'pkce-secret');
+    vault.remove('workos-pkce');
+    expect(vault.has('workos-pkce')).toBe(false);
   });
 
   it('refuses plaintext fallback when OS encryption is unavailable', () => {
     const { vault } = fixture(false);
-    expect(() => vault.set('openrouter-api-key', 'sk-or-secret')).toThrow(/not available/);
+    expect(() => vault.set('workos-session', 'session-secret')).toThrow(/not available/);
   });
 });

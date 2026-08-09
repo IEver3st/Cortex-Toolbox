@@ -1,44 +1,111 @@
 import { describe, expect, it } from 'vitest';
-import { verifyStripeSignature } from './billing';
+import { policyForPrice, priceForSelection, pricePolicies, verifyStripeSignature } from './billing';
 import {
-  MAX_RUN_REQUESTS,
+  dollarsToMicrousd,
   normalizeBillingStatus,
-  PLAN_LIMITS,
-  planForStripeStatus,
+  parseProviderUsage,
+  subscriptionPermitsAi,
   usagePeriod,
 } from './db';
+import type { Env } from './env';
+
+const env = {
+  STRIPE_CREATOR_MONTHLY_PRICE_ID: 'price_1U2PuXQqaHP22wnxni38nsWc',
+  STRIPE_CREATOR_ANNUAL_PRICE_ID: 'price_1U2PueQqaHP22wnxROZLdlkX',
+  STRIPE_PRO_MONTHLY_PRICE_ID: 'price_1U2PulQqaHP22wnxUhu72m9y',
+  STRIPE_PRO_ANNUAL_PRICE_ID: 'price_1U2PurQqaHP22wnxp58We6AZ',
+} as Env;
 
 describe('Stripe entitlement authority', () => {
-  it('accepts a current valid webhook signature', async () => {
+  it('maps all four server-owned plan selections to the approved prices', () => {
+    expect(pricePolicies(env)).toEqual([
+      { plan: 'creator', interval: 'month', priceId: 'price_1U2PuXQqaHP22wnxni38nsWc' },
+      { plan: 'creator', interval: 'year', priceId: 'price_1U2PueQqaHP22wnxROZLdlkX' },
+      { plan: 'pro', interval: 'month', priceId: 'price_1U2PulQqaHP22wnxUhu72m9y' },
+      { plan: 'pro', interval: 'year', priceId: 'price_1U2PurQqaHP22wnxp58We6AZ' },
+    ]);
+    expect(priceForSelection(env, { plan: 'creator', interval: 'month' })).toBe(
+      env.STRIPE_CREATOR_MONTHLY_PRICE_ID,
+    );
+    expect(priceForSelection(env, { plan: 'pro', interval: 'year' })).toBe(
+      env.STRIPE_PRO_ANNUAL_PRICE_ID,
+    );
+  });
+
+  it('never grants an entitlement for an unknown price', () => {
+    expect(policyForPrice(env, 'price_modified_client')).toBeNull();
+  });
+
+  it('rejects duplicate or missing price configuration', () => {
+    expect(() =>
+      pricePolicies({ ...env, STRIPE_PRO_ANNUAL_PRICE_ID: env.STRIPE_PRO_MONTHLY_PRICE_ID }),
+    ).toThrow('invalid');
+    expect(() => pricePolicies({ ...env, STRIPE_CREATOR_MONTHLY_PRICE_ID: '' })).toThrow(
+      'not configured',
+    );
+  });
+
+  it('accepts a current valid webhook signature and rejects forged or stale signatures', async () => {
     const body = '{"id":"evt_1"}';
     const timestamp = 1_800_000_000;
     const signature = await testSignature(`${timestamp}.${body}`, 'whsec_test');
     await expect(
       verifyStripeSignature(body, `t=${timestamp},v1=${signature}`, 'whsec_test', timestamp),
     ).resolves.toBeUndefined();
-  });
-
-  it('rejects forged and stale checkout/webhook state', async () => {
     await expect(
       verifyStripeSignature('{}', 't=1,v1=forged', 'whsec_test', 10_000),
     ).rejects.toThrow('timestamp');
   });
 
-  it('derives Pro only from active or trialing subscription states', () => {
-    expect(planForStripeStatus('active')).toBe('pro');
-    expect(planForStripeStatus('trialing')).toBe('pro');
-    expect(planForStripeStatus('past_due')).toBe('free');
-    expect(planForStripeStatus('canceled')).toBe('free');
+  it('keeps recoverable past-due access but disables terminal subscription states', () => {
+    expect(subscriptionPermitsAi('active')).toBe(true);
+    expect(subscriptionPermitsAi('trialing')).toBe(true);
+    expect(subscriptionPermitsAi('past_due')).toBe(true);
+    for (const status of [
+      'unpaid',
+      'canceled',
+      'incomplete',
+      'incomplete_expired',
+      'paused',
+    ] as const) {
+      expect(subscriptionPermitsAi(status)).toBe(false);
+    }
     expect(normalizeBillingStatus('unrecognized')).toBe('none');
   });
 
-  it('uses calendar-month usage windows', () => {
-    expect(PLAN_LIMITS).toEqual({ free: 25, pro: 1_000 });
-    expect(MAX_RUN_REQUESTS).toBe(10);
-    expect(usagePeriod(new Date('2026-08-08T12:00:00.000Z'))).toEqual({
-      key: '2026-08',
-      end: '2026-09-01T00:00:00.000Z',
+  it('anchors monthly AI periods independently of annual Stripe cadence', () => {
+    expect(usagePeriod('2026-01-31T15:30:00.000Z', new Date('2026-02-15T00:00:00.000Z'))).toEqual({
+      startsAt: '2026-01-31T15:30:00.000Z',
+      endsAt: '2026-02-28T15:30:00.000Z',
     });
+    expect(usagePeriod('2026-01-31T15:30:00.000Z', new Date('2026-03-02T00:00:00.000Z'))).toEqual({
+      startsAt: '2026-02-28T15:30:00.000Z',
+      endsAt: '2026-03-31T15:30:00.000Z',
+    });
+  });
+});
+
+describe('integer provider usage accounting', () => {
+  it('uses actual provider cost, cached tokens, and integer microUSD', () => {
+    expect(
+      parseProviderUsage({
+        usage: {
+          prompt_tokens: 120,
+          prompt_tokens_details: { cached_tokens: 80 },
+          completion_tokens: 48,
+          completion_tokens_details: { reasoning_tokens: 31 },
+          cost: 0.0025004,
+        },
+      }),
+    ).toEqual({
+      inputTokens: 120,
+      cachedInputTokens: 80,
+      outputTokens: 48,
+      reasoningTokens: 31,
+      providerCostMicrousd: 2_500,
+    });
+    expect(dollarsToMicrousd('0.95')).toBe(950_000);
+    expect(dollarsToMicrousd(0)).toBe(0);
   });
 });
 

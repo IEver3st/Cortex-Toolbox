@@ -132,9 +132,20 @@ export default function Chassis(): React.JSX.Element {
   const [changedOnly, setChangedOnly] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [highlightedField, setHighlightedField] = useState<string | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(
+    () => !window.matchMedia('(max-width: 1120px)').matches,
+  );
   const [compareMode, setCompareMode] = useState(false);
   const [aiModifiedFields, setAiModifiedFields] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    const compact = window.matchMedia('(max-width: 1120px)');
+    const collapseInspector = (event: MediaQueryListEvent) => {
+      if (event.matches) setInspectorOpen(false);
+    };
+    compact.addEventListener('change', collapseInspector);
+    return () => compact.removeEventListener('change', collapseInspector);
+  }, []);
 
   const workspaceName =
     workspace?.project?.name ?? workspace?.root.split(/[\\/]/).at(-1) ?? 'Workspace';

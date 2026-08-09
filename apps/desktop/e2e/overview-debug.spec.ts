@@ -1,10 +1,15 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 test('overview survives activity history and renders sections', async () => {
   const userData = await mkdtemp(path.join(tmpdir(), 'cortex-overview-debug-'));
+  await writeFile(
+    path.join(userData, 'config.json'),
+    JSON.stringify({ preferences: { onboardingVersion: 1 } }),
+    'utf8',
+  );
   const app = await electron.launch({
     args: ['apps/desktop', `--user-data-dir=${userData}`],
     env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined },

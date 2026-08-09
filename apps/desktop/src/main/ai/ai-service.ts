@@ -6,16 +6,13 @@ import {
   type AiChangeProposal,
   type AiChatRequest,
   type AiStreamEvent,
-  type CortexAiModel,
 } from '@cortex/ai';
 import { hashAiSource, validateAiChangeProposal } from '@cortex/ai/patches';
 import type { ResourceFile } from '@cortex/resource-parser';
 import type { Preferences } from '../../shared/contracts';
 import { aiStreamEvent } from '../../shared/contracts';
-import { loadCuratedOpenRouterModels, isCuratedModel } from './model-registry';
-import { OpenRouterClient, type OpenRouterMessage } from './openrouter';
 import { CortexHostedClient } from './hosted-client';
-import { secureSecrets } from './secure-storage';
+import type { HostedMessage } from './hosted-protocol';
 import { CORTEX_WORKSPACE_TOOLS, CortexWorkspaceTools } from './workspace-tools';
 import { resolveAiWorkspaceFile } from './workspace-sandbox';
 
@@ -32,62 +29,20 @@ export class CortexAiService {
     private readonly getWorkspaceRoot: () => string,
     private readonly listWorkspaceFiles: () => Promise<ResourceFile[]>,
     private readonly planWrite: (relativePath: string, source: string) => Promise<string>,
+    private readonly applyWritePlans: (planIds: string[]) => Promise<unknown>,
     private readonly getHostedAccessToken: () => Promise<string>,
     private readonly hostedBaseUrl: string,
   ) {}
 
-  credentialStatus(): { configured: boolean; encryptionAvailable: boolean } {
-    return {
-      configured: secureSecrets.has('openrouter-api-key'),
-      encryptionAvailable: secureSecrets.encryptionAvailable(),
-    };
-  }
-
-  setCredential(apiKey: string): { configured: true } {
-    secureSecrets.set('openrouter-api-key', apiKey.trim());
-    return { configured: true };
-  }
-
-  removeCredential(): boolean {
-    secureSecrets.remove('openrouter-api-key');
-    return true;
-  }
-
-  async models(signal?: AbortSignal): Promise<CortexAiModel[]> {
-    const preferences = this.assertAiEnabled();
-    if (preferences.aiProvider === 'cortex-hosted') {
-      const token = await this.getHostedAccessToken();
-      return new CortexHostedClient(this.hostedBaseUrl, token).models(signal);
-    }
-    return loadCuratedOpenRouterModels(signal);
-  }
-
-  async testProvider(): Promise<{ provider: Preferences['aiProvider']; model: string }> {
-    const preferences = this.assertAiEnabled();
-    if (!isCuratedModel(preferences.aiModel))
-      throw new Error('Select a supported Cortex AI model.');
-    if (preferences.aiProvider === 'openrouter') {
-      const key = secureSecrets.get('openrouter-api-key');
-      if (!key) throw new Error('Add an OpenRouter API key first.');
-      await new OpenRouterClient(key).test();
-      return { provider: preferences.aiProvider, model: preferences.aiModel };
-    }
-    const token = await this.getHostedAccessToken();
-    await new CortexHostedClient(this.hostedBaseUrl, token).me();
-    return { provider: preferences.aiProvider, model: preferences.aiModel };
-  }
-
   start(request: AiChatRequest, sender: WebContents): string {
-    const preferences = this.assertEnabled();
-    if (!isCuratedModel(request.model))
-      throw new Error('The selected model is not in the Cortex allowlist.');
+    this.assertEnabled();
     if (this.runs.size > 0)
       throw new Error('Cortex AI already has an active run. Stop it before starting another.');
     const runId = randomUUID();
     const controller = new AbortController();
     this.runs.set(runId, controller);
     this.emit(sender, { runId, type: 'started' });
-    void this.run(runId, request, preferences, sender, controller.signal).finally(() => {
+    void this.run(runId, request, sender, controller.signal).finally(() => {
       this.runs.delete(runId);
     });
     return runId;
@@ -101,14 +56,18 @@ export class CortexAiService {
     return true;
   }
 
-  async planProposal(proposal: AiChangeProposal): Promise<PlannedWrite[]> {
+  async planProposal(
+    proposal: AiChangeProposal,
+    expectedWorkspaceRoot = this.getWorkspaceRoot(),
+  ): Promise<PlannedWrite[]> {
     const preferences = this.assertWorkspaceEnabled();
+    this.assertActiveWorkspace(expectedWorkspaceRoot);
     const permission = decideAiPermission(preferences.aiWorkspaceAccess, 'apply-change');
     if (!permission.allowed) throw new Error(permission.reason);
     const validated = validateAiChangeProposal(proposal);
     const plans: PlannedWrite[] = [];
     for (const file of validated.files) {
-      const resolved = await resolveAiWorkspaceFile(this.getWorkspaceRoot(), file.relativePath, {
+      const resolved = await resolveAiWorkspaceFile(expectedWorkspaceRoot, file.relativePath, {
         mustExist: true,
       });
       const currentSource = await readFile(resolved.target, 'utf8');
@@ -128,52 +87,47 @@ export class CortexAiService {
   private async run(
     runId: string,
     request: AiChatRequest,
-    preferences: Preferences,
     sender: WebContents,
     signal: AbortSignal,
   ): Promise<void> {
-    let secret: string | null = null;
     try {
-      const openRouter =
-        preferences.aiProvider === 'openrouter'
-          ? new OpenRouterClient((secret = secureSecrets.get('openrouter-api-key') ?? ''))
-          : null;
-      if (preferences.aiProvider === 'openrouter' && !secret) {
-        throw new Error('Add an OpenRouter API key in Settings → AI.');
+      const hosted = new CortexHostedClient(this.hostedBaseUrl, await this.getHostedAccessToken());
+      const account = await hosted.me(signal);
+      if (!account.ai.entitled) {
+        throw new Error('Cortex AI is available with Creator or Pro.');
       }
-      const hosted =
-        preferences.aiProvider === 'cortex-hosted'
-          ? new CortexHostedClient(this.hostedBaseUrl, await this.getHostedAccessToken())
-          : null;
+      if (!account.ai.enabled) {
+        throw new Error(
+          account.ai.usage.state === 'used'
+            ? "You've used this month's Cortex AI capacity."
+            : 'Cortex AI is temporarily unavailable.',
+        );
+      }
+      const workspaceRoot = this.getWorkspaceRoot();
       const tools = new CortexWorkspaceTools(
-        this.getWorkspaceRoot,
-        this.listWorkspaceFiles,
+        () => workspaceRoot,
+        async () => {
+          this.assertActiveWorkspace(workspaceRoot);
+          return this.listWorkspaceFiles();
+        },
         request,
-        (proposal) => this.emit(sender, { runId, type: 'proposal', proposal }),
+        (proposal) => this.handleProposal(runId, proposal, workspaceRoot, sender),
       );
-      const messages: OpenRouterMessage[] = [
+      const messages: HostedMessage[] = [
         { role: 'system', content: tools.systemPrompt() },
         ...request.messages.map((message) => ({ role: message.role, content: message.content })),
       ];
       let toolSteps = 0;
-      while (toolSteps < 8) {
-        const completion = openRouter
-          ? await openRouter.completeWithTools({
-              model: request.model,
-              messages,
-              tools: CORTEX_WORKSPACE_TOOLS,
-              signal,
-            })
-          : hosted
-            ? await hosted.completeWithTools({
-                runId,
-                step: toolSteps,
-                model: request.model,
-                messages,
-                tools: CORTEX_WORKSPACE_TOOLS,
-                signal,
-              })
-            : failMissingProvider();
+      const toolResultCache = new Map<string, string>();
+      while (toolSteps < 12) {
+        const completion = await hosted.completeWithTools({
+          runId,
+          step: toolSteps,
+          reasoningMode: request.reasoningMode,
+          messages,
+          tools: CORTEX_WORKSPACE_TOOLS,
+          signal,
+        });
         messages.push({
           role: 'assistant',
           content: completion.content,
@@ -182,7 +136,7 @@ export class CortexAiService {
         if (completion.toolCalls.length === 0) break;
         for (const toolCall of completion.toolCalls) {
           toolSteps += 1;
-          if (toolSteps > 8) throw new Error('Cortex AI reached the workspace tool-step limit.');
+          if (toolSteps > 12) throw new Error('Cortex AI reached the workspace tool-step limit.');
           const activityId = randomUUID();
           this.emit(sender, {
             runId,
@@ -196,7 +150,12 @@ export class CortexAiService {
             },
           });
           try {
-            const result = await tools.execute(toolCall.function.name, toolCall.function.arguments);
+            const cacheKey = `${toolCall.function.name}\u0000${toolCall.function.arguments}`;
+            const cachedResult = toolResultCache.get(cacheKey);
+            const result =
+              cachedResult ??
+              (await tools.execute(toolCall.function.name, toolCall.function.arguments));
+            if (cachedResult === undefined) toolResultCache.set(cacheKey, result);
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -211,11 +170,14 @@ export class CortexAiService {
                 tool: toolCall.function.name,
                 label: toolLabel(toolCall.function.name),
                 status: 'complete',
-                summary: summarizeToolResult(toolCall.function.name, result),
+                summary:
+                  cachedResult === undefined
+                    ? summarizeToolResult(toolCall.function.name, result)
+                    : 'Reused the previous identical tool result.',
               },
             });
           } catch (error) {
-            const message = redactError(error, secret);
+            const message = redactError(error);
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -235,6 +197,7 @@ export class CortexAiService {
             });
           }
         }
+        compactHostedConversation(messages);
       }
       messages.push({
         role: 'user',
@@ -242,27 +205,21 @@ export class CortexAiService {
           'Provide the final concise answer now. Summarize verified tool results and any proposed changes. Do not call more tools and do not claim writes were applied.',
       });
       const onDelta = (text: string) => this.emit(sender, { runId, type: 'delta', text });
-      if (openRouter) {
-        await openRouter.streamFinal({ model: request.model, messages, signal, onDelta });
-      } else if (hosted) {
-        await hosted.streamFinal({
-          runId,
-          step: toolSteps + 1,
-          model: request.model,
-          messages,
-          signal,
-          onDelta,
-        });
-      } else {
-        failMissingProvider();
-      }
+      await hosted.streamFinal({
+        runId,
+        step: toolSteps + 1,
+        reasoningMode: request.reasoningMode,
+        messages,
+        signal,
+        onDelta,
+      });
       this.emit(sender, { runId, type: 'complete' });
     } catch (error) {
       if (signal.aborted) {
         this.emit(sender, { runId, type: 'complete' });
         return;
       }
-      this.emit(sender, { runId, type: 'error', message: redactError(error, secret) });
+      this.emit(sender, { runId, type: 'error', message: redactError(error) });
     }
   }
 
@@ -282,19 +239,96 @@ export class CortexAiService {
     return preferences;
   }
 
+  private assertActiveWorkspace(expectedRoot: string): void {
+    if (this.getWorkspaceRoot() !== expectedRoot) {
+      throw new Error('The active workspace changed. Start a new Cortex AI request.');
+    }
+  }
+
+  /** Internal proposal event hook; exposed for security-boundary tests. */
+  async handleProposal(
+    runId: string,
+    proposal: AiChangeProposal,
+    workspaceRoot: string,
+    sender: WebContents,
+  ): Promise<void> {
+    this.emit(sender, { runId, type: 'proposal', proposal });
+    const permission = decideAiPermission(this.getPreferences().aiWorkspaceAccess, 'apply-change');
+    if (!permission.autoApply) return;
+    try {
+      const plans = await this.planProposal(proposal, workspaceRoot);
+      await this.applyWritePlans(plans.map((plan) => plan.planId));
+      try {
+        const hosted = new CortexHostedClient(
+          this.hostedBaseUrl,
+          await this.getHostedAccessToken(),
+        );
+        await hosted.markApplied(runId);
+      } catch {
+        // Applying the protected local transaction must not depend on telemetry delivery.
+      }
+      this.emit(sender, {
+        runId,
+        type: 'proposal',
+        proposal: { ...proposal, status: 'applied' },
+      });
+    } catch (error) {
+      const message = redactError(error);
+      this.emit(sender, {
+        runId,
+        type: 'proposal',
+        proposal: {
+          ...proposal,
+          status: /changed|workspace/i.test(message) ? 'stale' : 'failed',
+        },
+      });
+      throw error;
+    }
+  }
+
   private emit(sender: WebContents, event: AiStreamEvent): void {
     if (!sender.isDestroyed()) sender.send(aiStreamEvent, event);
   }
 }
 
-function failMissingProvider(): never {
-  throw new Error('The selected Cortex AI provider is not available.');
+function compactHostedConversation(messages: HostedMessage[]): void {
+  if (messages.length <= 28) return;
+  const system = messages[0];
+  if (system?.role !== 'system') return;
+  const recent = messages.slice(-18);
+  const earlier = messages.slice(1, -18);
+  const goal = earlier.find((message) => message.role === 'user')?.content.slice(0, 1_500) ?? '';
+  const verified = earlier
+    .filter((message) => message.role === 'tool')
+    .slice(-10)
+    .map((message) => `${message.name}: ${message.content.slice(0, 600)}`)
+    .join('\n');
+  const decisions = earlier
+    .filter((message) => message.role === 'assistant' && message.content.trim())
+    .slice(-4)
+    .map((message) => message.content.slice(0, 500))
+    .join('\n');
+  messages.splice(
+    0,
+    messages.length,
+    system,
+    {
+      role: 'system',
+      content: [
+        'Structured state from compacted earlier conversation:',
+        `Goal: ${goal || 'Continue the current workspace task.'}`,
+        `Verified tool results:\n${verified || 'No earlier tool result retained.'}`,
+        `Recent decisions:\n${decisions || 'No earlier assistant decision retained.'}`,
+      ].join('\n\n'),
+    },
+    ...recent,
+  );
 }
 
-function redactError(error: unknown, secret: string | null): string {
+function redactError(error: unknown): string {
   const message =
     error instanceof Error ? error.message : 'Cortex AI could not complete the request.';
-  return secret ? message.replaceAll(secret, '[redacted]') : message;
+  return message;
 }
 
 function toolLabel(name: string): string {

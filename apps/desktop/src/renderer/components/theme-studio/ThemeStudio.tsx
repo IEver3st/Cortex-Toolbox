@@ -349,13 +349,14 @@ export function ThemeStudio({
 
       <div className="theme-studio-layout">
         <div className="theme-studio-controls">
-          <section className="theme-studio-section" id="interface-mode">
+          <section className="theme-studio-section" id="interface-mode-section">
             <div className="theme-studio-row">
               <div>
                 <span className="theme-section-label">Interface mode</span>
               </div>
               <Select
                 id="interface-mode"
+                ariaLabel="Interface mode"
                 value={draft.colorMode}
                 options={(['system', 'light', 'dark'] as const).map((mode) => ({
                   value: mode,

@@ -28,12 +28,13 @@ describe('AI workspace sandbox', () => {
     expect(() => assertAiReadablePath('credentials.json')).toThrow(/Sensitive files/);
   });
 
-  it('enforces read-only and session-scoped write permissions', () => {
+  it('separates approval UX from deterministic write safety', () => {
     expect(decideAiPermission('read-only', 'propose-change').allowed).toBe(false);
     expect(decideAiPermission('ask-before-changes', 'apply-change').requiresConfirmation).toBe(
       true,
     );
-    expect(decideAiPermission('allow-session', 'apply-change').requiresConfirmation).toBe(false);
-    expect(decideAiPermission('allow-session', 'destructive').requiresConfirmation).toBe(true);
+    expect(decideAiPermission('approve-safe-edits', 'apply-change').autoApply).toBe(false);
+    expect(decideAiPermission('approve-all', 'apply-change').autoApply).toBe(true);
+    expect(decideAiPermission('approve-all', 'destructive').requiresConfirmation).toBe(true);
   });
 });

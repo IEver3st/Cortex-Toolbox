@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import { BrowserWindow, shell } from 'electron';
 import { createWorkOS, type User } from '@workos-inc/node';
 import { z } from 'zod';
@@ -9,6 +10,8 @@ import { secureSecrets } from './ai/secure-storage';
 
 export const CORTEX_AUTH_PROTOCOL = 'cortex-toolbox';
 export const CORTEX_AUTH_REDIRECT_URI = `${CORTEX_AUTH_PROTOCOL}://auth/callback`;
+export const CORTEX_AUTH_LOOPBACK_PATH = '/auth/callback';
+const CORTEX_AUTH_LOOPBACK_HOST = '127.0.0.1';
 const PKCE_TTL_MS = 10 * 60 * 1_000;
 
 const storedUserSchema = z
@@ -32,6 +35,7 @@ const pendingPkceSchema = z
   .object({
     state: z.string().min(20),
     codeVerifier: z.string().min(20),
+    redirectUri: z.url(),
     expiresAt: z.number().int().positive(),
   })
   .strict();
@@ -40,6 +44,9 @@ export class CortexAuthService {
   private readonly workos;
   private expired = false;
   private notice: string | null = null;
+  private loopbackServer: Server | null = null;
+  private loopbackRedirectUri: string | null = null;
+  private loopbackTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly env: MainEnv) {
     // The placeholder is never sent: every network entrypoint first calls
@@ -58,29 +65,31 @@ export class CortexAuthService {
   async beginSignIn(): Promise<void> {
     this.assertConfigured();
     this.notice = null;
-    const { url, state, codeVerifier } =
-      await this.workos.userManagement.getAuthorizationUrlWithPKCE({
-        provider: 'authkit',
-        clientId: this.env.CORTEX_WORKOS_CLIENT_ID,
-        redirectUri: CORTEX_AUTH_REDIRECT_URI,
-      });
-    secureSecrets.set(
-      'workos-pkce',
-      JSON.stringify({ state, codeVerifier, expiresAt: Date.now() + PKCE_TTL_MS }),
-    );
-    await shell.openExternal(url);
+    const redirectUri =
+      this.env.CORTEX_WORKOS_CALLBACK_MODE === 'loopback'
+        ? await this.startLoopbackCallback()
+        : CORTEX_AUTH_REDIRECT_URI;
+    try {
+      const { url, state, codeVerifier } =
+        await this.workos.userManagement.getAuthorizationUrlWithPKCE({
+          provider: 'authkit',
+          clientId: this.env.CORTEX_WORKOS_CLIENT_ID,
+          redirectUri,
+        });
+      secureSecrets.set(
+        'workos-pkce',
+        JSON.stringify({ state, codeVerifier, redirectUri, expiresAt: Date.now() + PKCE_TTL_MS }),
+      );
+      await shell.openExternal(url);
+    } catch (error) {
+      this.stopLoopbackCallback();
+      throw error;
+    }
   }
 
   async handleCallback(rawUrl: string): Promise<void> {
     this.assertConfigured();
     const url = new URL(rawUrl);
-    if (
-      url.protocol !== `${CORTEX_AUTH_PROTOCOL}:` ||
-      url.hostname !== 'auth' ||
-      url.pathname !== '/callback'
-    ) {
-      throw new Error('Cortex received an invalid authentication callback.');
-    }
     const oauthError = url.searchParams.get('error');
     if (oauthError) {
       throw new Error(url.searchParams.get('error_description') ?? oauthError);
@@ -88,6 +97,14 @@ export class CortexAuthService {
     const rawPkce = secureSecrets.get('workos-pkce');
     const pkce = pendingPkceSchema.parse(rawPkce ? JSON.parse(rawPkce) : null);
     secureSecrets.remove('workos-pkce');
+    const expectedCallback = new URL(pkce.redirectUri);
+    if (
+      url.protocol !== expectedCallback.protocol ||
+      url.host !== expectedCallback.host ||
+      url.pathname !== expectedCallback.pathname
+    ) {
+      throw new Error('Cortex received an invalid authentication callback.');
+    }
     if (pkce.expiresAt < Date.now()) throw new Error('The sign-in request expired. Start again.');
     const state = url.searchParams.get('state');
     if (!state || !sameSecret(state, pkce.state)) {
@@ -134,8 +151,8 @@ export class CortexAuthService {
         status: 'signed-in',
         identity,
         plan: hosted.plan,
-        usage: hosted.usage,
         billing: hosted.billing,
+        ai: hosted.ai,
         message: null,
       };
     } catch {
@@ -147,32 +164,29 @@ export class CortexAuthService {
   }
 
   async signOut(): Promise<void> {
-    const session = this.readSession();
+    this.stopLoopbackCallback();
     secureSecrets.remove('workos-session');
     secureSecrets.remove('workos-pkce');
     this.expired = false;
     this.notice = null;
-    if (session) {
-      const sessionId = jwtStringClaim(session.accessToken, 'sid');
-      if (sessionId) {
-        await shell.openExternal(this.workos.userManagement.getLogoutUrl({ sessionId }));
-      }
-    }
     await this.broadcast();
   }
 
-  async checkout(cadence: 'monthly' | 'annual'): Promise<void> {
+  async checkout(plan: 'creator' | 'pro', interval: 'month' | 'year'): Promise<void> {
     const token = await this.accessToken();
     const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).checkout(
-      cadence,
+      plan,
+      interval,
     );
     await shell.openExternal(url);
+    this.scheduleBillingRefresh();
   }
 
   async portal(): Promise<void> {
     const token = await this.accessToken();
     const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).portal();
     await shell.openExternal(url);
+    this.scheduleBillingRefresh();
   }
 
   async broadcast(): Promise<void> {
@@ -250,8 +264,8 @@ export class CortexAuthService {
       status,
       identity,
       plan: null,
-      usage: null,
       billing: null,
+      ai: null,
       message: this.notice,
     };
   }
@@ -262,6 +276,101 @@ export class CortexAuthService {
       throw new Error('Secure session storage is not available on this device.');
     }
   }
+
+  private scheduleBillingRefresh(): void {
+    for (const delay of [2_000, 5_000, 10_000]) {
+      const timer = setTimeout(() => void this.broadcast(), delay);
+      timer.unref();
+    }
+  }
+
+  private async startLoopbackCallback(): Promise<string> {
+    this.stopLoopbackCallback();
+    const server = createServer((request, response) => {
+      void this.handleLoopbackCallback(request.url ?? '/', response);
+    });
+    const redirectUri = await new Promise<string>((resolve, reject) => {
+      const rejectOnError = (error: Error) => reject(error);
+      server.once('error', rejectOnError);
+      server.listen(0, CORTEX_AUTH_LOOPBACK_HOST, () => {
+        server.off('error', rejectOnError);
+        const address = server.address();
+        if (!address || typeof address === 'string') {
+          reject(new Error('Cortex could not start its local sign-in callback.'));
+          return;
+        }
+        resolve(`http://${CORTEX_AUTH_LOOPBACK_HOST}:${address.port}${CORTEX_AUTH_LOOPBACK_PATH}`);
+      });
+    });
+    this.loopbackServer = server;
+    this.loopbackRedirectUri = redirectUri;
+    this.loopbackTimer = setTimeout(() => this.stopLoopbackCallback(), PKCE_TTL_MS);
+    this.loopbackTimer.unref();
+    return redirectUri;
+  }
+
+  private async handleLoopbackCallback(
+    requestUrl: string,
+    response: ServerResponse,
+  ): Promise<void> {
+    const redirectUri = this.loopbackRedirectUri;
+    if (!redirectUri) {
+      writeLoopbackPage(response, false);
+      return;
+    }
+    const callback = new URL(requestUrl, redirectUri);
+    if (
+      callback.pathname !== CORTEX_AUTH_LOOPBACK_PATH ||
+      callback.origin !== new URL(redirectUri).origin
+    ) {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('Not found');
+      return;
+    }
+    try {
+      await this.handleCallback(callback.toString());
+      writeLoopbackPage(response, true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Cortex sign-in failed.';
+      await this.reportFailure(message);
+      writeLoopbackPage(response, false);
+    } finally {
+      this.stopLoopbackCallback();
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.isDestroyed()) continue;
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+      }
+    }
+  }
+
+  private stopLoopbackCallback(): void {
+    if (this.loopbackTimer) clearTimeout(this.loopbackTimer);
+    this.loopbackTimer = null;
+    this.loopbackRedirectUri = null;
+    this.loopbackServer?.close();
+    this.loopbackServer = null;
+  }
+}
+
+function writeLoopbackPage(response: ServerResponse, success: boolean): void {
+  response.writeHead(success ? 200 : 400, {
+    'Cache-Control': 'no-store',
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Security-Policy':
+      "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  const title = success ? 'Signed in to Cortex' : 'Cortex sign-in could not finish';
+  const detail = success
+    ? 'You can return to Cortex. This tab should close automatically.'
+    : 'Return to Cortex and try signing in again.';
+  response.end(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<style>html{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#232a2e;color:#d8d3ba;font:15px/1.55 system-ui,sans-serif}.panel{width:min(420px,calc(100vw - 48px));border:1px solid #465258;padding:28px;background:#2d363b}.mark{color:#a7c080;font-weight:700;letter-spacing:.02em}h1{margin:10px 0 8px;font-size:22px}p{margin:0;color:#9da9a0}button{margin-top:20px;border:1px solid #58666c;background:#374247;color:#d8d3ba;padding:9px 14px;font:inherit;cursor:pointer}</style></head>
+<body><main class="panel"><div class="mark">Cortex ToolBox</div><h1>${title}</h1><p>${detail}</p><button type="button" onclick="window.close()">Close this tab</button></main>${success ? '<script>window.close()</script>' : ''}</body></html>`);
 }
 
 function identityFromSession(session: StoredSession): NonNullable<AccountStatus['identity']> {
@@ -292,11 +401,6 @@ function decodeJwt(token: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function jwtStringClaim(token: string, claim: string): string | null {
-  const value = decodeJwt(token)?.[claim];
-  return typeof value === 'string' ? value : null;
 }
 
 function jwtNumberClaim(token: string, claim: string): number | null {

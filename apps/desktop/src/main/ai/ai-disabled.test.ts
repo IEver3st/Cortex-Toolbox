@@ -1,20 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PREFERENCES } from '../../shared/contracts';
 
-vi.mock('./secure-storage', () => ({
-  secureSecrets: {
-    has: () => false,
-    encryptionAvailable: () => true,
-    get: () => null,
-    set: vi.fn(),
-    remove: vi.fn(),
-  },
-}));
-
 import { CortexAiService } from './ai-service';
 
 describe('AI disabled boundary', () => {
-  it('rejects network, context, chat, and proposal work before collecting workspace state', async () => {
+  it('rejects network, context, chat, and proposal work before collecting workspace state', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const getRoot = vi.fn(() => 'C:\\workspace');
     const listFiles = vi.fn(() => Promise.resolve([]));
@@ -24,16 +14,24 @@ describe('AI disabled boundary', () => {
       listFiles,
       vi.fn(),
       vi.fn(),
+      vi.fn(),
       '',
     );
 
-    await expect(service.models()).rejects.toThrow('disabled');
     expect(() =>
       service.start(
         {
           threadId: 'thread_01',
-          model: 'deepseek/deepseek-v4-flash',
-          messages: [],
+          reasoningMode: 'fast',
+          messages: [
+            {
+              id: 'message-1',
+              role: 'user',
+              content: 'Inspect this workspace',
+              createdAt: new Date(0).toISOString(),
+              attachments: [],
+            },
+          ],
           attachments: [],
           activeModule: null,
           activeFile: null,

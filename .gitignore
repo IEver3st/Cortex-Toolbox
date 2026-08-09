@@ -23,6 +23,9 @@ playwright-report/
 .env.production
 .env.*.local
 !.env.example
+apps/cortex-cloud/.dev.vars
+apps/cortex-cloud/.dev.vars.*
+!apps/cortex-cloud/.dev.vars.example
 
 # IDE and tool state
 .vscode/*

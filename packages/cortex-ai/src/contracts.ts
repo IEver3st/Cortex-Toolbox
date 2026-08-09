@@ -1,10 +1,15 @@
 import { z } from 'zod';
 
-export const aiWorkspaceAccessSchema = z.enum(['read-only', 'ask-before-changes', 'allow-session']);
+export const aiWorkspaceAccessSchema = z.enum([
+  'read-only',
+  'ask-before-changes',
+  'approve-safe-edits',
+  'approve-all',
+]);
 export type AiWorkspaceAccess = z.infer<typeof aiWorkspaceAccessSchema>;
 
-export const aiProviderSchema = z.enum(['cortex-hosted', 'openrouter']);
-export type AiProvider = z.infer<typeof aiProviderSchema>;
+export const cortexReasoningModeSchema = z.enum(['fast', 'advanced']);
+export type CortexReasoningMode = z.infer<typeof cortexReasoningModeSchema>;
 
 export const aiRoleSchema = z.enum(['user', 'assistant']);
 export type AiRole = z.infer<typeof aiRoleSchema>;
@@ -61,25 +66,16 @@ export const aiChangeProposalSchema = z.object({
 });
 export type AiChangeProposal = z.infer<typeof aiChangeProposalSchema>;
 
-export const cortexAiModelSchema = z.object({
-  id: z.string().min(1).max(200),
-  label: z.string().min(1).max(120),
-  tier: z.enum(['fast', 'advanced', 'experimental']),
-  contextLength: z.number().int().positive().nullable(),
-  supportsTools: z.boolean(),
-  supportsStreaming: z.boolean(),
-  trainingPolicy: z.enum(['no-training', 'may-train', 'unknown']),
-});
-export type CortexAiModel = z.infer<typeof cortexAiModelSchema>;
-
-export const aiChatRequestSchema = z.object({
-  threadId: z.string().min(1).max(160),
-  model: z.string().min(1).max(200),
-  messages: z.array(aiConversationMessageSchema).min(1).max(100),
-  attachments: z.array(aiContextAttachmentSchema).max(20),
-  activeModule: z.string().max(120).nullable(),
-  activeFile: z.string().max(4096).nullable(),
-});
+export const aiChatRequestSchema = z
+  .object({
+    threadId: z.string().min(1).max(160),
+    reasoningMode: cortexReasoningModeSchema,
+    messages: z.array(aiConversationMessageSchema).min(1).max(100),
+    attachments: z.array(aiContextAttachmentSchema).max(20),
+    activeModule: z.string().max(120).nullable(),
+    activeFile: z.string().max(4096).nullable(),
+  })
+  .strict();
 export type AiChatRequest = z.infer<typeof aiChatRequestSchema>;
 
 export const aiStreamEventSchema = z.discriminatedUnion('type', [

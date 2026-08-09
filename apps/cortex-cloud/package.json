@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "verify:config": "node scripts/verify-config.mjs",
+    "stripe:setup": "node scripts/setup-stripe.mjs",
+    "deploy": "pnpm run verify:config && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@cortex/ai": "workspace:*",
     "hono": "4.13.1",
     "jose": "6.2.8",
     "zod": "4.4.3"

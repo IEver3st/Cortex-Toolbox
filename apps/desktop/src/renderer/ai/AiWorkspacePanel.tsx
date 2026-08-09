@@ -15,10 +15,11 @@ import {
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { toast } from 'sonner';
 import { parseHandlingDocument } from '@cortex/vehicle-meta';
-import { normalizePreferences } from '../../shared/contracts';
+import { normalizePreferences, type AccountStatus } from '../../shared/contracts';
 import { usePreferences, PREFERENCES_QUERY_KEY } from '../hooks/usePreferences';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatResultError } from '../lib/result';
+import { ActionButton } from '../components/ActionButton';
 import { Select } from '../components/Select';
 import { useWorkspaceStore } from '../store/workspace';
 import { getCortexAiModuleProvider } from './module-registry';
@@ -38,11 +39,6 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from '../components/ui/AiChatPrimitives';
-
-const MODEL_LABELS: Record<string, string> = {
-  'deepseek/deepseek-v4-flash': 'DeepSeek V4 Flash',
-  'deepseek/deepseek-v4-pro': 'DeepSeek V4 Pro',
-};
 
 function createAttachment(
   kind: AiContextAttachment['kind'],
@@ -320,7 +316,9 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
   const setActiveThread = useAiStore((state) => state.setActiveThread);
   const deleteThread = useAiStore((state) => state.deleteThread);
   const beginTurn = useAiStore((state) => state.beginTurn);
+  const openTab = useWorkspaceStore((state) => state.openTab);
   const [composer, setComposer] = useState('');
+  const [account, setAccount] = useState<AccountStatus | null>(null);
   const [removedContext, setRemovedContext] = useState<Set<string>>(() => new Set());
   const [width, setWidth] = useState(preferences?.aiPanelWidth ?? 420);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -335,6 +333,23 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
   useEffect(() => {
     if (preferences?.aiPanelWidth) setWidth(preferences.aiPanelWidth);
   }, [preferences?.aiPanelWidth]);
+
+  useEffect(() => {
+    if (!panelOpen) return;
+    let active = true;
+    const dispose = window.cortex.account.onChanged((status) => active && setAccount(status));
+    const refresh = () =>
+      void window.cortex.account.status().then((result) => {
+        if (active && result.ok) setAccount(result.data);
+      });
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => {
+      active = false;
+      dispose();
+      window.removeEventListener('focus', refresh);
+    };
+  }, [panelOpen]);
 
   useEffect(() => {
     if (!workspaceRoot || !panelOpen) return;
@@ -392,7 +407,7 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
     try {
       const result = await window.cortex.ai.startChat({
         threadId: turn.thread.id,
-        model: preferences.aiModel,
+        reasoningMode: preferences.reasoningMode,
         messages: turn.thread.messages.filter(
           (message) => message.role === 'user' || message.content.trim().length > 0,
         ),
@@ -443,6 +458,110 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
 
   if (!panelOpen || !preferences?.aiEnabled || !workspaceRoot) return null;
 
+  const openAccount = () => {
+    globalThis.sessionStorage.setItem('cortex.settings.requestedSection', 'account');
+    openTab({
+      id: 'settings',
+      label: 'Settings',
+      relativePath: null,
+      kind: 'settings',
+      dirty: false,
+    });
+  };
+  const accountAi = account?.ai;
+  const accessBlocked =
+    account?.status !== 'signed-in' ||
+    accountAi?.entitled !== true ||
+    !accountAi.enabled ||
+    accountAi.usage.state === 'used';
+
+  if (accessBlocked) {
+    const signedIn = account?.status === 'signed-in';
+    const entitled = accountAi?.entitled === true;
+    const used = entitled && accountAi.usage.state === 'used';
+    return (
+      <aside
+        className="ai-workspace-panel"
+        style={{ '--ai-panel-width': `${width}px`, width } as CSSProperties}
+        aria-label="Cortex AI workspace panel"
+      >
+        <div
+          className="ai-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize Cortex AI panel"
+          onPointerDown={beginResize}
+        />
+        <header className="ai-panel-header">
+          <div>
+            <strong>Cortex AI</strong>
+            <span>Hosted workspace reasoning</span>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Close Cortex AI"
+            onClick={() => setPanelOpen(false)}
+          >
+            <PanelRightClose aria-hidden="true" />
+          </button>
+        </header>
+        <div className="ai-commercial-gate" role="status">
+          <span className="ai-empty-mark" aria-hidden="true">
+            C
+          </span>
+          <h2>
+            {!account
+              ? 'Checking Cortex AI access…'
+              : !signedIn
+                ? 'Sign in to use Cortex AI'
+                : !entitled
+                  ? 'Available with Creator or Pro'
+                  : used
+                    ? 'Monthly capacity used'
+                    : 'Cortex AI is temporarily unavailable'}
+          </h2>
+          <p>
+            {!account
+              ? 'Confirming your account and subscription.'
+              : !signedIn
+                ? 'Cortex Toolbox remains free. An account and paid plan are only required for hosted AI.'
+                : !entitled
+                  ? 'Choose Creator or Pro to add hosted AI while keeping every local Toolbox workflow free.'
+                  : used
+                    ? `You’ve used this month’s Cortex AI capacity.${accountAi.usage.resetsAt ? ` It resets ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric' }).format(new Date(accountAi.usage.resetsAt))}.` : ''}`
+                    : 'Try again in a moment. Nothing in your workspace was changed.'}
+          </p>
+          {account ? (
+            <div>
+              {!signedIn ? (
+                <ActionButton
+                  variant="primary"
+                  onClick={async () => {
+                    const result = await window.cortex.account.signIn();
+                    if (!result.ok) toast.error(formatResultError(result.error));
+                  }}
+                >
+                  Sign in
+                </ActionButton>
+              ) : !entitled ? (
+                <ActionButton variant="primary" onClick={openAccount}>
+                  View plans
+                </ActionButton>
+              ) : used && account.plan === 'creator' ? (
+                <ActionButton variant="primary" onClick={openAccount}>
+                  Upgrade to Pro
+                </ActionButton>
+              ) : (
+                <ActionButton onClick={openAccount}>Open account</ActionButton>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside
       className="ai-workspace-panel"
@@ -459,7 +578,7 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
       <header className="ai-panel-header">
         <div>
           <strong>Cortex AI</strong>
-          <span>{MODEL_LABELS[preferences.aiModel] ?? preferences.aiModel}</span>
+          <span>{preferences.reasoningMode === 'advanced' ? 'Advanced' : 'Fast'} reasoning</span>
         </div>
         <div>
           <button
@@ -605,12 +724,7 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
             {activeRunId ? <CircleStop aria-hidden="true" /> : <Send aria-hidden="true" />}
           </button>
         </div>
-        <small>
-          {preferences.aiProvider === 'openrouter'
-            ? 'Direct via your OpenRouter key'
-            : 'Cortex Hosted'}{' '}
-          · Enter to send · Shift+Enter for a new line
-        </small>
+        <small>Cortex Cloud · Enter to send · Shift+Enter for a new line</small>
       </footer>
     </aside>
   );

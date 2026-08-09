@@ -7,7 +7,9 @@ import {
   type SecureSecretName,
 } from './secure-vault';
 
-const store = new Store<{ secrets: Partial<Record<SecureSecretName, string>> }>({
+type PersistedSecretName = SecureSecretName | 'openrouter-api-key';
+
+const store = new Store<{ secrets: Partial<Record<PersistedSecretName, string>> }>({
   name: 'secure-credentials',
   defaults: { secrets: {} },
 });
@@ -25,3 +27,8 @@ const cipher: SecretCipher = {
 };
 
 export const secureSecrets = new EncryptedSecretVault(persistence, cipher);
+
+/** One-way upgrade cleanup for credentials created by the retired desktop AI path. */
+export function removeLegacyAiCredential(): void {
+  store.delete('secrets.openrouter-api-key');
+}

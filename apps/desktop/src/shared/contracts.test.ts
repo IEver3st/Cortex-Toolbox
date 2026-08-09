@@ -37,6 +37,36 @@ describe('IPC contracts', () => {
       }).success,
     ).toBe(false);
   });
+  it('accepts only Cortex reasoning intent at the desktop AI boundary', () => {
+    const request = {
+      threadId: 'thread_1',
+      reasoningMode: 'fast',
+      messages: [
+        {
+          id: 'message_1',
+          role: 'user',
+          content: 'Inspect this workspace.',
+          createdAt: new Date(0).toISOString(),
+          attachments: [],
+        },
+      ],
+      attachments: [],
+      activeModule: null,
+      activeFile: null,
+    };
+    expect(ipcDefinitions[channels.aiChatStart].request.safeParse(request).success).toBe(true);
+    expect(
+      ipcDefinitions[channels.aiChatStart].request.safeParse({
+        ...request,
+        model: 'deepseek/deepseek-v4-pro',
+      }).success,
+    ).toBe(false);
+    expect(
+      Object.values(channels).some((channel) =>
+        /credential|provider|model|key-test/i.test(channel),
+      ),
+    ).toBe(false);
+  });
   it('keeps handling creation on a dedicated strict write-planning contract', () => {
     expect(
       ipcDefinitions[channels.filesPlanCreateHandling].request.safeParse({
@@ -154,5 +184,22 @@ describe('preference migration', () => {
       success: true,
       data: themed,
     });
+  });
+
+  it('migrates retired model preferences into validated Cortex reasoning modes', () => {
+    expect(
+      normalizePreferences({ ...DEFAULT_PREFERENCES, reasoningMode: undefined, aiModel: 'fast' })
+        .reasoningMode,
+    ).toBe('fast');
+    expect(
+      normalizePreferences({
+        ...DEFAULT_PREFERENCES,
+        reasoningMode: undefined,
+        aiModel: 'deepseek/deepseek-v4-pro',
+      }).reasoningMode,
+    ).toBe('advanced');
+    expect(
+      normalizePreferences({ ...DEFAULT_PREFERENCES, reasoningMode: 'unsupported' }).reasoningMode,
+    ).toBe('fast');
   });
 });

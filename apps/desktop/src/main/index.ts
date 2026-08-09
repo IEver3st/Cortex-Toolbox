@@ -32,17 +32,17 @@ const logger = pino(
 );
 const isDevelopment = Boolean(MAIN_WINDOW_VITE_DEV_SERVER_URL);
 const csp = isDevelopment
-  ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws:; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
-  : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
+  ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self' data:; connect-src 'self' ws:; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+  : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
 let primaryWindow: BrowserWindow | null = null;
 let pendingAuthUrl: string | null = findAuthUrl(process.argv);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
-} else if (process.defaultApp && process.argv[1]) {
+} else if (process.defaultApp) {
   app.setAsDefaultProtocolClient(CORTEX_AUTH_PROTOCOL, process.execPath, [
-    path.resolve(process.argv[1]),
+    path.resolve(app.getAppPath()),
   ]);
 } else {
   app.setAsDefaultProtocolClient(CORTEX_AUTH_PROTOCOL);
@@ -117,6 +117,12 @@ function createWindow(): BrowserWindow {
   else
     void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   primaryWindow = window;
+  let lastAccountRefresh = 0;
+  window.on('focus', () => {
+    if (Date.now() - lastAccountRefresh < 2_000) return;
+    lastAccountRefresh = Date.now();
+    void cortexAuth.broadcast();
+  });
   window.on('closed', () => {
     if (primaryWindow === window) primaryWindow = null;
   });

@@ -1,4 +1,4 @@
-export type SecureSecretName = 'openrouter-api-key' | 'workos-session' | 'workos-pkce';
+export type SecureSecretName = 'workos-session' | 'workos-pkce';
 
 export interface SecretCipher {
   available(): boolean;

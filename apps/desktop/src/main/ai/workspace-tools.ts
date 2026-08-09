@@ -16,7 +16,7 @@ import {
   validateMetaXml,
 } from '@cortex/vehicle-meta';
 import type { ResourceFile } from '@cortex/resource-parser';
-import type { OpenRouterToolDefinition } from './openrouter';
+import type { HostedToolDefinition } from './hosted-protocol';
 import { resolveAiWorkspaceFile } from './workspace-sandbox';
 
 const TEXT_EXTENSIONS = new Set([
@@ -40,7 +40,7 @@ const TEXT_EXTENSIONS = new Set([
   '.toml',
 ]);
 
-export const CORTEX_WORKSPACE_TOOLS: OpenRouterToolDefinition[] = [
+export const CORTEX_WORKSPACE_TOOLS: HostedToolDefinition[] = [
   tool('get_workspace_summary', 'Get a concise summary of the active FiveM workspace.', {}),
   tool('list_workspace_files', 'List workspace-relative files. Sensitive files are excluded.', {
     query: { type: 'string', description: 'Optional case-insensitive path filter.' },
@@ -108,7 +108,7 @@ function tool(
   description: string,
   properties: Record<string, unknown>,
   required: string[] = [],
-): OpenRouterToolDefinition {
+): HostedToolDefinition {
   return {
     type: 'function',
     function: {
@@ -124,7 +124,7 @@ export class CortexWorkspaceTools {
     private readonly getRoot: () => string,
     private readonly listFiles: () => Promise<ResourceFile[]>,
     private readonly request: AiChatRequest,
-    private readonly onProposal: (proposal: AiChangeProposal) => void,
+    private readonly onProposal: (proposal: AiChangeProposal) => Promise<void> | void,
   ) {}
 
   systemPrompt(): string {
@@ -316,7 +316,7 @@ export class CortexWorkspaceTools {
       handlingPatch: null,
       status: 'proposed',
     };
-    this.onProposal(proposal);
+    await this.onProposal(proposal);
     return JSON.stringify({ proposalId: proposal.id, status: 'proposed', files: [relativePath] });
   }
 
@@ -376,7 +376,7 @@ export class CortexWorkspaceTools {
       handlingPatch: { relativePath, handlingName: entry.handlingName, values: changes },
       status: 'proposed',
     };
-    this.onProposal(proposal);
+    await this.onProposal(proposal);
     return JSON.stringify({ proposalId: proposal.id, status: 'proposed', changes });
   }
 

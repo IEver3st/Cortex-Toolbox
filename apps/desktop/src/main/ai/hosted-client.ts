@@ -1,22 +1,42 @@
 import { z } from 'zod';
-import type { CortexAiModel } from '@cortex/ai/contracts';
-import type { OpenRouterMessage, OpenRouterToolCall, OpenRouterToolDefinition } from './openrouter';
+import type { CortexReasoningMode } from '@cortex/ai/contracts';
+import type { HostedMessage, HostedToolCall, HostedToolDefinition } from './hosted-protocol';
 
 const hostedAccountSchema = z
   .object({
-    plan: z.enum(['free', 'pro']),
-    usage: z
-      .object({
-        used: z.number().int().nonnegative(),
-        limit: z.number().int().positive(),
-        remaining: z.number().int().nonnegative(),
-        periodEnd: z.iso.datetime(),
-      })
-      .strict(),
+    plan: z.enum(['free', 'creator', 'pro']),
     billing: z
       .object({
-        status: z.enum(['none', 'active', 'trialing', 'past_due', 'canceled', 'unpaid']),
-        renewalDate: z.iso.datetime().nullable(),
+        interval: z.enum(['month', 'year']).nullable(),
+        subscriptionStatus: z.enum([
+          'none',
+          'active',
+          'trialing',
+          'past_due',
+          'unpaid',
+          'canceled',
+          'incomplete',
+          'incomplete_expired',
+          'paused',
+        ]),
+        cancelAtPeriodEnd: z.boolean(),
+        renewsAt: z.iso.datetime().nullable(),
+        stripeCustomerPresent: z.boolean(),
+        paymentFailed: z.boolean(),
+      })
+      .strict(),
+    ai: z
+      .object({
+        entitled: z.boolean(),
+        enabled: z.boolean(),
+        usage: z
+          .object({
+            percent: z.number().int().min(0).max(100),
+            state: z.enum(['plenty', 'normal', 'nearing', 'grace', 'used']),
+            resetsAt: z.iso.datetime().nullable(),
+          })
+          .strict(),
+        limits: z.object({ concurrentRuns: z.number().int().min(0).max(2) }).strict(),
       })
       .strict(),
   })
@@ -25,7 +45,7 @@ const hostedAccountSchema = z
 export type HostedAccount = z.infer<typeof hostedAccountSchema>;
 
 interface HostedCompletionChoice {
-  message?: { content?: string | null; tool_calls?: OpenRouterToolCall[] };
+  message?: { content?: string | null; tool_calls?: HostedToolCall[] };
 }
 
 export class CortexHostedClient {
@@ -40,19 +60,18 @@ export class CortexHostedClient {
     );
   }
 
-  async models(signal?: AbortSignal): Promise<CortexAiModel[]> {
-    const payload = await this.json('/v1/ai/models', {
-      method: 'GET',
-      ...(signal ? { signal } : {}),
-    });
-    return z.array(z.custom<CortexAiModel>()).parse(payload);
-  }
-
-  async checkout(cadence: 'monthly' | 'annual'): Promise<string> {
+  async checkout(plan: 'creator' | 'pro', interval: 'month' | 'year'): Promise<string> {
     const payload = z
       .object({ url: z.url() })
-      .parse(await this.json('/v1/billing/checkout', { method: 'POST', body: { cadence } }));
+      .parse(await this.json('/v1/billing/checkout', { method: 'POST', body: { plan, interval } }));
     return payload.url;
+  }
+
+  async markApplied(runId: string): Promise<void> {
+    await this.json(`/v1/ai/runs/${encodeURIComponent(runId)}/applied`, {
+      method: 'POST',
+      body: {},
+    });
   }
 
   async portal(): Promise<string> {
@@ -65,11 +84,11 @@ export class CortexHostedClient {
   async completeWithTools(input: {
     runId: string;
     step: number;
-    model: string;
-    messages: OpenRouterMessage[];
-    tools: OpenRouterToolDefinition[];
+    reasoningMode: CortexReasoningMode;
+    messages: HostedMessage[];
+    tools: HostedToolDefinition[];
     signal: AbortSignal;
-  }): Promise<{ content: string; toolCalls: OpenRouterToolCall[] }> {
+  }): Promise<{ content: string; toolCalls: HostedToolCall[] }> {
     const payload = (await this.json('/v1/ai/chat', {
       method: 'POST',
       body: {
@@ -77,7 +96,7 @@ export class CortexHostedClient {
         step: input.step,
         final: false,
         stream: false,
-        model: input.model,
+        reasoningMode: input.reasoningMode,
         messages: input.messages,
         tools: input.tools,
       },
@@ -92,8 +111,8 @@ export class CortexHostedClient {
   async streamFinal(input: {
     runId: string;
     step: number;
-    model: string;
-    messages: OpenRouterMessage[];
+    reasoningMode: CortexReasoningMode;
+    messages: HostedMessage[];
     signal: AbortSignal;
     onDelta: (text: string) => void;
   }): Promise<void> {
@@ -104,7 +123,7 @@ export class CortexHostedClient {
         step: input.step,
         final: true,
         stream: true,
-        model: input.model,
+        reasoningMode: input.reasoningMode,
         messages: input.messages,
       },
       signal: input.signal,
@@ -165,8 +184,25 @@ export class CortexHostedClient {
       } catch {
         // Keep the bounded response text when the service did not return JSON.
       }
-      throw new Error(message || `Cortex Hosted request failed (${response.status}).`);
+      throw new Error(productErrorForHostedResponse(response.status, message));
     }
     return response;
   }
+}
+
+function productErrorForHostedResponse(status: number, detail: string): string {
+  if (status === 401) return 'Sign in to use Cortex AI.';
+  if (status === 402) {
+    return /available with Creator or Pro/i.test(detail)
+      ? 'Cortex AI is available with Creator or Pro.'
+      : "You've used this month's Cortex AI capacity.";
+  }
+  if (status === 409) return detail || 'Another Cortex AI request is already active.';
+  if (status === 413) return 'Cortex AI context is too large for this request.';
+  if (status === 429) return detail || 'Cortex AI reached a safe run limit.';
+  if (status === 503 && /not configured/i.test(detail)) {
+    return 'Cortex Cloud is not configured correctly.';
+  }
+  if (status >= 500) return 'Cortex AI is temporarily unavailable.';
+  return detail || 'Cortex AI could not complete the request.';
 }

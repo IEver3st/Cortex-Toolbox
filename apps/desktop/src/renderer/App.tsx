@@ -18,15 +18,17 @@ import { JobsPanel } from './components/JobsPanel';
 import { SectionPageHost } from './components/SectionPageHost';
 import { StartView } from './components/StartView';
 import { TitleBar } from './components/TitleBar';
+import { Onboarding } from './components/Onboarding';
 import { Tooltip } from './components/Tooltip';
 import { appBranding } from './config/public-env';
 import { useModuleStore } from './store/modules';
 import { useWorkspaceStore } from './store/workspace';
 import { applyPreferencesToDocument } from './lib/themes';
 import { ModuleView } from './modules/module-view';
-import { preferencesQueryOptions } from './hooks/usePreferences';
 import { usePreferences } from './hooks/usePreferences';
 import { useAiStore } from './ai/ai-store';
+import { CURRENT_ONBOARDING_VERSION, normalizePreferences } from '../shared/contracts';
+import { PREFERENCES_QUERY_KEY } from './hooks/usePreferences';
 
 function recordWorkspaceRenderError(error: Error, info: ErrorInfo): void {
   void window.cortex.reports.recordClientError({
@@ -175,19 +177,10 @@ export function App(): React.JSX.Element {
     });
   }, [bridgeReady, setFiles, workspace]);
   useEffect(() => {
-    if (!bridgeReady) return;
-    let active = true;
-    let dispose: (() => void) | undefined;
-    void queryClient.ensureQueryData(preferencesQueryOptions()).then((preferences) => {
-      if (!active) return;
-      dispose = applyPreferencesToDocument(preferences);
-      hydrateModules(preferences.installedModules);
-    });
-    return () => {
-      active = false;
-      dispose?.();
-    };
-  }, [bridgeReady, hydrateModules, queryClient]);
+    if (!bridgeReady || !preferences.data) return;
+    hydrateModules(preferences.data.installedModules);
+    return applyPreferencesToDocument(preferences.data);
+  }, [bridgeReady, hydrateModules, preferences.data]);
   useEffect(() => {
     if (preferences.data?.aiEnabled !== true) setAiPanelOpen(false);
   }, [preferences.data?.aiEnabled, setAiPanelOpen]);
@@ -269,6 +262,24 @@ export function App(): React.JSX.Element {
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (preferences.isPending || !preferences.data) {
+    return <WorkspaceLoading />;
+  }
+
+  if (preferences.data.onboardingVersion < CURRENT_ONBOARDING_VERSION) {
+    return (
+      <Onboarding
+        preferences={preferences.data}
+        save={async (patch) => {
+          const next = normalizePreferences({ ...preferences.data, ...patch });
+          const result = await window.cortex.settings.set(next);
+          if (!result.ok) throw new Error(result.error.message);
+          queryClient.setQueryData(PREFERENCES_QUERY_KEY, result.data);
+        }}
+      />
     );
   }
 

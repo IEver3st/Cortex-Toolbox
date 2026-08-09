@@ -2,12 +2,11 @@ import { projectSchema, projectTypeSchema } from '@cortex/project-schema';
 import {
   aiChangeProposalSchema,
   aiChatRequestSchema,
-  aiProviderSchema,
   aiWorkspaceAccessSchema,
-  cortexAiModelSchema,
+  cortexReasoningModeSchema,
   type AiStreamEvent,
-  type AiProvider,
   type AiWorkspaceAccess,
+  type CortexReasoningMode,
 } from '@cortex/ai/contracts';
 import { z } from 'zod';
 import { pluginManifestSchema, pluginPermissionSchema } from '@cortex/plugin-sdk';
@@ -133,11 +132,6 @@ export const channels = {
   jobsCancel: 'jobs:cancel',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
-  aiModels: 'ai:models',
-  aiCredentialStatus: 'ai:credential-status',
-  aiCredentialSet: 'ai:credential-set',
-  aiCredentialRemove: 'ai:credential-remove',
-  aiProviderTest: 'ai:provider-test',
   aiChatStart: 'ai:chat-start',
   aiChatCancel: 'ai:chat-cancel',
   aiPlanProposal: 'ai:plan-proposal',
@@ -177,20 +171,40 @@ export const accountStatusSchema = z
       })
       .strict()
       .nullable(),
-    plan: z.enum(['free', 'pro']).nullable(),
-    usage: z
+    plan: z.enum(['free', 'creator', 'pro']).nullable(),
+    billing: z
       .object({
-        used: z.number().int().nonnegative(),
-        limit: z.number().int().positive(),
-        remaining: z.number().int().nonnegative(),
-        periodEnd: z.iso.datetime(),
+        interval: z.enum(['month', 'year']).nullable(),
+        subscriptionStatus: z.enum([
+          'none',
+          'active',
+          'trialing',
+          'past_due',
+          'unpaid',
+          'canceled',
+          'incomplete',
+          'incomplete_expired',
+          'paused',
+        ]),
+        cancelAtPeriodEnd: z.boolean(),
+        renewsAt: z.iso.datetime().nullable(),
+        stripeCustomerPresent: z.boolean(),
+        paymentFailed: z.boolean(),
       })
       .strict()
       .nullable(),
-    billing: z
+    ai: z
       .object({
-        status: z.enum(['none', 'active', 'trialing', 'past_due', 'canceled', 'unpaid']),
-        renewalDate: z.iso.datetime().nullable(),
+        entitled: z.boolean(),
+        enabled: z.boolean(),
+        usage: z
+          .object({
+            percent: z.number().int().min(0).max(100),
+            state: z.enum(['plenty', 'normal', 'nearing', 'grace', 'used']),
+            resetsAt: z.iso.datetime().nullable(),
+          })
+          .strict(),
+        limits: z.object({ concurrentRuns: z.number().int().min(0).max(2) }).strict(),
       })
       .strict()
       .nullable(),
@@ -260,7 +274,10 @@ export const recentWorkspaceDetailSchema = recentWorkspaceSchema.extend({
 });
 export type RecentWorkspaceDetail = z.infer<typeof recentWorkspaceDetailSchema>;
 /** Canonical defaults — also used when migrating older preference stores. */
+export const CURRENT_ONBOARDING_VERSION = 1;
+
 export const DEFAULT_PREFERENCES = {
+  onboardingVersion: 0,
   interfaceScale: 1,
   uiFontSize: 16,
   reducedMotion: false,
@@ -284,13 +301,13 @@ export const DEFAULT_PREFERENCES = {
   releaseBranch: 'stable',
   installedModules: defaultInstalledModuleIds(),
   aiEnabled: false,
-  aiProvider: 'cortex-hosted',
-  aiModel: 'deepseek/deepseek-v4-flash',
+  reasoningMode: 'fast',
   aiWorkspaceAccess: 'ask-before-changes',
   aiPanelWidth: 420,
 } as const;
 
 export interface Preferences {
+  onboardingVersion: number;
   interfaceScale: number;
   uiFontSize: number;
   reducedMotion: boolean;
@@ -325,14 +342,14 @@ export interface Preferences {
   releaseBranch: 'stable' | 'developer';
   installedModules: ReturnType<typeof defaultInstalledModuleIds>;
   aiEnabled: boolean;
-  aiProvider: AiProvider;
-  aiModel: string;
+  reasoningMode: CortexReasoningMode;
   aiWorkspaceAccess: AiWorkspaceAccess;
   aiPanelWidth: number;
 }
 
 /** Strict field contracts for well-formed preference values. */
 export const preferenceSchema = z.object({
+  onboardingVersion: z.number().int().min(0).max(CURRENT_ONBOARDING_VERSION),
   interfaceScale: z.number().min(0.8).max(1.5),
   uiFontSize: z.number().int().min(13).max(18),
   reducedMotion: z.boolean(),
@@ -368,8 +385,7 @@ export const preferenceSchema = z.object({
   releaseBranch: z.enum(['stable', 'developer']),
   installedModules: z.array(moduleIdSchema),
   aiEnabled: z.boolean(),
-  aiProvider: aiProviderSchema,
-  aiModel: z.string().min(1).max(200),
+  reasoningMode: cortexReasoningModeSchema,
   aiWorkspaceAccess: aiWorkspaceAccessSchema,
   aiPanelWidth: z.number().int().min(320).max(720),
 });
@@ -382,6 +398,9 @@ export const preferenceSchema = z.object({
 export function normalizePreferences(raw: unknown): Preferences {
   const source =
     raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const onboardingVersion = preferenceSchema.shape.onboardingVersion.safeParse(
+    source.onboardingVersion,
+  );
   const scale = preferenceSchema.shape.interfaceScale.safeParse(source.interfaceScale);
   const uiFontSize = preferenceSchema.shape.uiFontSize.safeParse(source.uiFontSize);
   const motion = preferenceSchema.shape.reducedMotion.safeParse(source.reducedMotion);
@@ -416,13 +435,25 @@ export function normalizePreferences(raw: unknown): Preferences {
   );
   const releaseBranch = preferenceSchema.shape.releaseBranch.safeParse(source.releaseBranch);
   const aiEnabled = preferenceSchema.shape.aiEnabled.safeParse(source.aiEnabled);
-  const aiProvider = preferenceSchema.shape.aiProvider.safeParse(source.aiProvider);
-  const aiModel = preferenceSchema.shape.aiModel.safeParse(source.aiModel);
+  const reasoningMode = preferenceSchema.shape.reasoningMode.safeParse(source.reasoningMode);
   const aiWorkspaceAccess = preferenceSchema.shape.aiWorkspaceAccess.safeParse(
     source.aiWorkspaceAccess,
   );
   const aiPanelWidth = preferenceSchema.shape.aiPanelWidth.safeParse(source.aiPanelWidth);
+  const migratedReasoningMode = reasoningMode.success
+    ? reasoningMode.data
+    : typeof source.aiModel === 'string' && /(?:v4-pro|advanced)/i.test(source.aiModel)
+      ? ('advanced' as const)
+      : ('fast' as const);
+  const migratedWorkspaceAccess = aiWorkspaceAccess.success
+    ? aiWorkspaceAccess.data
+    : source.aiWorkspaceAccess === 'allow-session'
+      ? ('approve-safe-edits' as const)
+      : DEFAULT_PREFERENCES.aiWorkspaceAccess;
   return {
+    onboardingVersion: onboardingVersion.success
+      ? onboardingVersion.data
+      : DEFAULT_PREFERENCES.onboardingVersion,
     interfaceScale: scale.success ? scale.data : DEFAULT_PREFERENCES.interfaceScale,
     uiFontSize: uiFontSize.success ? uiFontSize.data : DEFAULT_PREFERENCES.uiFontSize,
     reducedMotion: motion.success ? motion.data : DEFAULT_PREFERENCES.reducedMotion,
@@ -468,11 +499,8 @@ export function normalizePreferences(raw: unknown): Preferences {
     releaseBranch: releaseBranch.success ? releaseBranch.data : DEFAULT_PREFERENCES.releaseBranch,
     installedModules: normalizeInstalledModules(source.installedModules),
     aiEnabled: aiEnabled.success ? aiEnabled.data : DEFAULT_PREFERENCES.aiEnabled,
-    aiProvider: aiProvider.success ? aiProvider.data : DEFAULT_PREFERENCES.aiProvider,
-    aiModel: aiModel.success ? aiModel.data : DEFAULT_PREFERENCES.aiModel,
-    aiWorkspaceAccess: aiWorkspaceAccess.success
-      ? aiWorkspaceAccess.data
-      : DEFAULT_PREFERENCES.aiWorkspaceAccess,
+    reasoningMode: migratedReasoningMode,
+    aiWorkspaceAccess: migratedWorkspaceAccess,
     aiPanelWidth: aiPanelWidth.success ? aiPanelWidth.data : DEFAULT_PREFERENCES.aiPanelWidth,
   };
 }
@@ -721,22 +749,6 @@ export const ipcDefinitions = {
     request: preferenceRequestSchema,
     response: result(preferenceValueSchema),
   },
-  [channels.aiModels]: { request: empty, response: result(z.array(cortexAiModelSchema).max(20)) },
-  [channels.aiCredentialStatus]: {
-    request: empty,
-    response: result(
-      z.object({ configured: z.boolean(), encryptionAvailable: z.boolean() }).strict(),
-    ),
-  },
-  [channels.aiCredentialSet]: {
-    request: z.object({ apiKey: z.string().trim().min(16).max(512) }).strict(),
-    response: result(z.object({ configured: z.literal(true) }).strict()),
-  },
-  [channels.aiCredentialRemove]: { request: empty, response: result(z.boolean()) },
-  [channels.aiProviderTest]: {
-    request: empty,
-    response: result(z.object({ provider: aiProviderSchema, model: z.string() }).strict()),
-  },
   [channels.aiChatStart]: {
     request: aiChatRequestSchema,
     response: result(z.object({ runId: z.string().min(1).max(160) }).strict()),
@@ -772,7 +784,9 @@ export const ipcDefinitions = {
   [channels.accountSignIn]: { request: empty, response: result(z.boolean()) },
   [channels.accountSignOut]: { request: empty, response: result(z.boolean()) },
   [channels.accountCheckout]: {
-    request: z.object({ cadence: z.enum(['monthly', 'annual']) }).strict(),
+    request: z
+      .object({ plan: z.enum(['creator', 'pro']), interval: z.enum(['month', 'year']) })
+      .strict(),
     response: result(z.boolean()),
   },
   [channels.accountPortal]: { request: empty, response: result(z.boolean()) },
@@ -883,13 +897,6 @@ export interface CortexApi {
     set(input: IpcRequest<'settings:set'>): Promise<IpcResponse<'settings:set'>>;
   };
   ai: {
-    models(): Promise<IpcResponse<'ai:models'>>;
-    credentialStatus(): Promise<IpcResponse<'ai:credential-status'>>;
-    setCredential(
-      input: IpcRequest<'ai:credential-set'>,
-    ): Promise<IpcResponse<'ai:credential-set'>>;
-    removeCredential(): Promise<IpcResponse<'ai:credential-remove'>>;
-    testProvider(): Promise<IpcResponse<'ai:provider-test'>>;
     startChat(input: IpcRequest<'ai:chat-start'>): Promise<IpcResponse<'ai:chat-start'>>;
     cancelChat(input: IpcRequest<'ai:chat-cancel'>): Promise<IpcResponse<'ai:chat-cancel'>>;
     planProposal(input: IpcRequest<'ai:plan-proposal'>): Promise<IpcResponse<'ai:plan-proposal'>>;
