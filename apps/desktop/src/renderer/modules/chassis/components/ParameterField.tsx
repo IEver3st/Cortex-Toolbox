@@ -11,6 +11,7 @@ export function ParameterField({
   value,
   original,
   highlighted,
+  aiModified,
   onChange,
   onReset,
 }: {
@@ -18,6 +19,7 @@ export function ParameterField({
   value: number;
   original: number;
   highlighted?: boolean;
+  aiModified?: boolean;
   onChange: (value: number) => void;
   onReset: () => void;
 }): React.JSX.Element {
@@ -25,10 +27,13 @@ export function ParameterField({
   const changed = value !== original;
   const native = handlingNativeCall(field, value);
   const balance = isBalanceField(field.key);
+  const outsideTypicalRange = value < field.min || value > field.max;
+  const sliderMin = Math.min(field.min, value);
+  const sliderMax = Math.max(field.max, value);
 
-  const setClamped = (raw: number) => {
+  const setFinite = (raw: number) => {
     if (!Number.isFinite(raw)) return;
-    onChange(Math.min(field.max, Math.max(field.min, raw)));
+    onChange(field.nativeType === 'int' ? Math.round(raw) : raw);
   };
 
   return (
@@ -43,26 +48,25 @@ export function ParameterField({
           <code className="chassis-param-technical" title="Technical property name">
             {field.key}
           </code>
+          {aiModified ? <span className="chassis-param-ai">AI</span> : null}
         </div>
         <div className="chassis-param-value-row">
           <input
             id={inputId}
             type="number"
             className="chassis-param-input"
-            min={field.min}
-            max={field.max}
             step={field.step}
             value={value}
             aria-describedby={`${inputId}-desc`}
             onChange={(event) => {
               const next = event.currentTarget.valueAsNumber;
-              if (Number.isFinite(next)) setClamped(next);
+              if (Number.isFinite(next)) setFinite(next);
             }}
             onKeyDown={(event) => {
               if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
                 event.preventDefault();
                 const delta = event.key === 'ArrowUp' ? field.step : -field.step;
-                setClamped(value + delta);
+                setFinite(value + delta);
               }
             }}
           />
@@ -98,28 +102,20 @@ export function ParameterField({
       {balance ? (
         <BalanceControl
           value={value}
-          min={field.min}
-          max={field.max}
+          min={sliderMin}
+          max={sliderMax}
           step={field.step}
           rearLabel="Rear"
           frontLabel="Front"
-          onChange={setClamped}
+          onChange={setFinite}
         />
       ) : field.nativeType === 'int' ? (
         <div className="chassis-stepper" role="group" aria-label={field.label}>
-          <button
-            type="button"
-            onClick={() => setClamped(value - field.step)}
-            aria-label="Decrease"
-          >
+          <button type="button" onClick={() => setFinite(value - field.step)} aria-label="Decrease">
             −
           </button>
           <span className="chassis-stepper-value">{Math.round(value)}</span>
-          <button
-            type="button"
-            onClick={() => setClamped(value + field.step)}
-            aria-label="Increase"
-          >
+          <button type="button" onClick={() => setFinite(value + field.step)} aria-label="Increase">
             +
           </button>
         </div>
@@ -128,16 +124,16 @@ export function ParameterField({
           type="range"
           className="chassis-param-slider"
           aria-label={field.label}
-          min={field.min}
-          max={field.max}
+          min={sliderMin}
+          max={sliderMax}
           step={field.step}
           value={value}
-          onChange={(event) => setClamped(Number(event.target.value))}
+          onChange={(event) => setFinite(Number(event.target.value))}
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
               event.preventDefault();
               const delta = event.key === 'ArrowRight' ? field.step : -field.step;
-              setClamped(value + delta);
+              setFinite(value + delta);
             }
           }}
         />
@@ -148,8 +144,9 @@ export function ParameterField({
           Original <strong>{formatFieldValue(field, original)}</strong>
         </span>
         <span>
-          Range {formatFieldValue(field, field.min)}–{formatFieldValue(field, field.max)}
+          Typical {formatFieldValue(field, field.min)}–{formatFieldValue(field, field.max)}
         </span>
+        {outsideTypicalRange ? <span className="is-warning">Outside typical range</span> : null}
         <span className="chassis-param-source">handling.meta</span>
       </div>
       <p className="chassis-param-desc" id={`${inputId}-desc`}>

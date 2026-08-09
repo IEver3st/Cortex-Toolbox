@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
@@ -20,6 +20,30 @@ const packageJson = JSON.parse(readFileSync(path.join(desktopRoot, 'package.json
 const workspacePackages = Object.keys(packageJson.dependencies).filter((dependency) =>
   dependency.startsWith('@cortex/'),
 );
+const workspacePackageRoots = new Map<string, string>();
+for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
+  if (!entry.isDirectory()) continue;
+  const packageRoot = path.join(packagesRoot, entry.name);
+  const manifestPath = path.join(packageRoot, 'package.json');
+  if (!existsSync(manifestPath)) continue;
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string };
+  if (manifest.name?.startsWith('@cortex/')) workspacePackageRoots.set(manifest.name, packageRoot);
+}
+const workspaceAliases = workspacePackages.flatMap((packageName) => {
+  const packageRoot = workspacePackageRoots.get(packageName);
+  if (!packageRoot) return [];
+  const escapedName = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return [
+    {
+      find: new RegExp(`^${escapedName}/(.+)$`),
+      replacement: `${packageRoot}/src/$1.ts`,
+    },
+    {
+      find: packageName,
+      replacement: `${packageRoot}/src/index.ts`,
+    },
+  ];
+});
 
 export default defineConfig({
   // Local workspace packages change during desktop development. Serving their
@@ -31,16 +55,7 @@ export default defineConfig({
     // Resolve @cortex/* to real package paths (not node_modules junctions).
     // Junction URLs keep a separate Vite module id; file watchers invalidate the
     // @fs id while /node_modules/@cortex/... stays stale — missing named exports.
-    alias: [
-      {
-        find: /^@cortex\/([^/]+)\/(.+)$/,
-        replacement: `${packagesRoot}/$1/src/$2.ts`,
-      },
-      {
-        find: /^@cortex\/([^/]+)$/,
-        replacement: `${packagesRoot}/$1/src/index.ts`,
-      },
-    ],
+    alias: workspaceAliases,
     dedupe: ['react', 'react-dom'],
   },
   define: {

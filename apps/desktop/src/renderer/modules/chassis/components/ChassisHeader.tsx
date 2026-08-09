@@ -1,70 +1,68 @@
+import type { HandlingDocumentEntry } from '@cortex/vehicle-meta';
 import {
+  BrainCircuit,
+  FileCog,
+  FolderOpen,
   GitCompareArrows,
   MoreHorizontal,
   RotateCcw,
   Save,
-  FileCog,
-  Download,
-  Upload,
 } from 'lucide-react';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Select } from '../../../components/Select';
 import type { ChassisSection } from '../types';
+
+function savedTimeLabel(savedAt: Date | null): string {
+  if (!savedAt) return 'Loaded from disk';
+  return `Saved ${savedAt.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })}`;
+}
 
 export function ChassisHeader({
   workspaceName,
-  vehicleName,
-  linkedFileCount,
-  unsavedCount,
+  activePath,
+  handlingPaths,
+  entries,
+  selectedEntryId,
+  dirty,
+  saving,
   blockingErrors,
-  sourceEdited,
+  savedAt,
+  onFileChange,
+  onEntryChange,
   onCompare,
-  onReviewSave,
+  onSave,
   onDiscard,
-  onRegenerateMissing,
-  onImport,
-  onExportAll,
-  planning,
+  onGenerateMetadata,
+  onOpenFile,
+  aiEnabled,
+  onAskAi,
 }: {
   workspaceName: string;
-  vehicleName: string;
-  linkedFileCount: number;
-  unsavedCount: number;
+  activePath: string;
+  handlingPaths: string[];
+  entries: HandlingDocumentEntry[];
+  selectedEntryId: string;
+  dirty: boolean;
+  saving: boolean;
   blockingErrors: number;
-  sourceEdited: boolean;
+  savedAt: Date | null;
+  onFileChange: (relativePath: string) => void;
+  onEntryChange: (entryId: string) => void;
   onCompare: () => void;
-  onReviewSave: () => void;
+  onSave: () => void;
   onDiscard: () => void;
-  onRegenerateMissing: () => void;
-  onImport: (files: FileList) => void;
-  onExportAll: () => void;
-  planning: boolean;
+  onGenerateMetadata: () => void;
+  onOpenFile: () => void;
+  aiEnabled: boolean;
+  onAskAi: (prompt: string) => void;
 }): React.JSX.Element {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const dirty = unsavedCount > 0 || sourceEdited;
-
-  const statSegments: React.ReactNode[] = [
-    `${linkedFileCount} linked file${linkedFileCount === 1 ? '' : 's'}`,
-  ];
-
-  if (blockingErrors > 0) {
-    statSegments.push(
-      <span className="chassis-header-stat is-error" role="status">
-        {blockingErrors} blocking error{blockingErrors === 1 ? '' : 's'}
-      </span>,
-    );
-  } else if (unsavedCount > 0) {
-    statSegments.push(
-      <span className="chassis-header-stat is-warn" role="status">
-        {unsavedCount} unsaved
-      </span>,
-    );
-  }
-
-  if (sourceEdited) {
-    statSegments.push(<span className="chassis-header-stat is-note">source edited</span>);
-  }
+  const selectedEntry = entries.find((entry) => entry.id === selectedEntryId);
 
   useEffect(() => {
     if (!overflowOpen) return;
@@ -73,44 +71,85 @@ export function ChassisHeader({
         setOverflowOpen(false);
       }
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    globalThis.document.addEventListener('mousedown', close);
+    return () => globalThis.document.removeEventListener('mousedown', close);
   }, [overflowOpen]);
 
   return (
-    <header className="chassis-header index-header">
-      <div className="chassis-header-main index-header-main">
-        <div className="index-header-titles">
-          <h1>Chassis</h1>
-        </div>
-        <div className="index-header-meta chassis-header-meta">
-          <span className="index-header-scope" title={workspaceName}>
-            {workspaceName || 'No workspace'}
-          </span>
-          <span className="index-header-sep" aria-hidden="true">
-            /
-          </span>
-          <code className="index-header-file">{vehicleName}</code>
-          <span className="index-header-sep" aria-hidden="true">
+    <header className="chassis-header index-header chassis-file-header">
+      <div className="chassis-file-context">
+        <span className="chassis-workspace-name" title={workspaceName}>
+          {workspaceName}
+        </span>
+        <div className="chassis-file-selectors">
+          <label>
+            <span>File</span>
+            {handlingPaths.length > 1 ? (
+              <Select
+                id="chassis-handling-file"
+                ariaLabel="Handling file"
+                value={activePath}
+                options={handlingPaths.map((path) => ({ value: path, label: path }))}
+                onChange={onFileChange}
+              />
+            ) : (
+              <code title={activePath}>{activePath}</code>
+            )}
+          </label>
+          <span className="chassis-context-separator" aria-hidden="true">
             ·
           </span>
-          <span className="chassis-header-stats">
-            {statSegments.map((segment, index) => (
-              <Fragment key={index}>
-                {index > 0 ? (
-                  <span className="chassis-header-stat-sep" aria-hidden="true">
-                    ·
-                  </span>
-                ) : null}
-                {segment}
-              </Fragment>
-            ))}
-          </span>
+          <label>
+            <span>Entry</span>
+            {entries.length > 1 ? (
+              <Select
+                id="chassis-handling-entry"
+                ariaLabel="Handling entry"
+                value={selectedEntryId}
+                options={entries.map((entry) => ({
+                  value: entry.id,
+                  label: entry.handlingName,
+                }))}
+                onChange={onEntryChange}
+              />
+            ) : (
+              <code>{selectedEntry?.handlingName ?? 'Unknown entry'}</code>
+            )}
+          </label>
         </div>
       </div>
 
-      <div className="index-header-controls chassis-header-controls">
+      <div className="chassis-header-controls">
+        <span
+          className={`chassis-save-state${blockingErrors > 0 ? ' is-error' : dirty ? ' is-dirty' : ' is-saved'}`}
+          role="status"
+        >
+          <span aria-hidden="true" />
+          {blockingErrors > 0
+            ? `${blockingErrors} validation issue${blockingErrors === 1 ? '' : 's'}`
+            : dirty
+              ? 'Modified'
+              : savedTimeLabel(savedAt)}
+        </span>
         <div className="index-header-actions">
+          {aiEnabled ? (
+            <button
+              type="button"
+              className="index-action"
+              onClick={() =>
+                onAskAi(
+                  'Diagnose the active handling entry. Inspect stability, centre of mass, inertia, suspension, anti-roll, roll centres, and traction relationships before proposing coherent changes.',
+                )
+              }
+            >
+              <BrainCircuit aria-hidden="true" />
+              Diagnose
+            </button>
+          ) : null}
+          <button type="button" className="index-action" disabled={!dirty} onClick={onDiscard}>
+            <RotateCcw aria-hidden="true" />
+            Reset
+          </button>
           <button type="button" className="index-action" onClick={onCompare}>
             <GitCompareArrows aria-hidden="true" />
             Compare
@@ -118,17 +157,20 @@ export function ChassisHeader({
           <button
             type="button"
             className="index-action primary"
-            disabled={planning || (!dirty && unsavedCount === 0)}
-            onClick={onReviewSave}
+            disabled={!dirty || saving || blockingErrors > 0}
+            title={
+              blockingErrors > 0 ? 'Resolve validation issues before saving.' : 'Save (Ctrl+S)'
+            }
+            onClick={onSave}
           >
             <Save aria-hidden="true" />
-            {planning ? 'Preparing…' : 'Review & save'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
           <div className="index-overflow" ref={overflowRef}>
             <button
               type="button"
               className="index-action icon-only"
-              aria-label="More actions"
+              aria-label="More Chassis actions"
               aria-expanded={overflowOpen}
               onClick={() => setOverflowOpen((open) => !open)}
             >
@@ -140,56 +182,62 @@ export function ChassisHeader({
                   type="button"
                   onClick={() => {
                     setOverflowOpen(false);
-                    onRegenerateMissing();
+                    onOpenFile();
+                  }}
+                >
+                  <FolderOpen aria-hidden="true" />
+                  Open handling file…
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    onGenerateMetadata();
                   }}
                 >
                   <FileCog aria-hidden="true" />
-                  Generate missing metadata…
+                  Create vehicle metadata…
                 </button>
-                <button type="button" onClick={() => importInputRef.current?.click()}>
-                  <Upload aria-hidden="true" />
-                  Import .meta files
-                </button>
-                <input
-                  ref={importInputRef}
-                  type="file"
-                  accept=".meta,.xml"
-                  multiple
-                  hidden
-                  onChange={(event) => {
-                    if (event.target.files?.length) {
-                      setOverflowOpen(false);
-                      onImport(event.target.files);
-                    }
-                    event.target.value = '';
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOverflowOpen(false);
-                    onExportAll();
-                  }}
-                >
-                  <Download aria-hidden="true" />
-                  Export all files
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOverflowOpen(false);
-                    if (
-                      window.confirm(
-                        'Discard all unsaved edits? Structured values and source edits revert to the last saved state.',
-                      )
-                    ) {
-                      onDiscard();
-                    }
-                  }}
-                >
-                  <RotateCcw aria-hidden="true" />
-                  Discard changes
-                </button>
+                {aiEnabled ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        onAskAi(
+                          'Improve the stability of the active handling entry while preserving its intended vehicle character. Explain the interacting changes.',
+                        );
+                      }}
+                    >
+                      <BrainCircuit aria-hidden="true" />
+                      Improve stability
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        onAskAi(
+                          'Analyse and tune the suspension of the active handling entry as a coherent system.',
+                        );
+                      }}
+                    >
+                      <BrainCircuit aria-hidden="true" />
+                      Tune suspension
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        onAskAi(
+                          'Analyse the traction relationships in the active handling entry and identify likely handling problems.',
+                        );
+                      }}
+                    >
+                      <BrainCircuit aria-hidden="true" />
+                      Analyse traction
+                    </button>
+                  </>
+                ) : null}
               </menu>
             ) : null}
           </div>
@@ -202,22 +250,25 @@ export function ChassisHeader({
 export function SectionNav({
   section,
   onChange,
-  handlingWarnings,
+  editingExisting = false,
 }: {
   section: ChassisSection;
   onChange: (section: ChassisSection) => void;
-  handlingWarnings: number;
+  editingExisting?: boolean;
 }): React.JSX.Element {
-  const items: { id: ChassisSection; label: string; badge?: number }[] = [
-    { id: 'overview', label: 'Overview' },
-    ...(handlingWarnings > 0
-      ? [{ id: 'handling' as const, label: 'Handling', badge: handlingWarnings }]
-      : [{ id: 'handling' as const, label: 'Handling' }]),
-    { id: 'vehicle-setup', label: 'Vehicle setup' },
-    { id: 'appearance', label: 'Appearance' },
-    { id: 'relationships', label: 'Relationships' },
-    { id: 'source', label: 'Source' },
-  ];
+  const items: { id: ChassisSection; label: string }[] = editingExisting
+    ? [
+        { id: 'handling', label: 'Handling' },
+        { id: 'source', label: 'Source' },
+      ]
+    : [
+        { id: 'overview', label: 'Overview' },
+        { id: 'handling', label: 'Handling' },
+        { id: 'vehicle-setup', label: 'Vehicle setup' },
+        { id: 'appearance', label: 'Appearance' },
+        { id: 'relationships', label: 'Relationships' },
+        { id: 'source', label: 'Source' },
+      ];
 
   return (
     <nav className="chassis-section-nav" aria-label="Chassis sections">
@@ -230,7 +281,6 @@ export function SectionNav({
           onClick={() => onChange(item.id)}
         >
           {item.label}
-          {item.badge ? <span className="chassis-nav-badge">{item.badge}</span> : null}
         </button>
       ))}
     </nav>

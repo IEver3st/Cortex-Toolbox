@@ -7,6 +7,8 @@ declare const __CORTEX_RELEASE_CHANNEL__: string | undefined;
 declare const __CORTEX_GITHUB_OWNER__: string | undefined;
 declare const __CORTEX_GITHUB_REPOSITORY__: string | undefined;
 declare const __CORTEX_ENABLE_AUTO_UPDATE__: string | undefined;
+declare const __CORTEX_WORKOS_CLIENT_ID__: string | undefined;
+declare const __CORTEX_CLOUD_API_URL__: string | undefined;
 
 const booleanString = z.enum(['true', 'false']).transform((value) => value === 'true');
 const githubSlug = z
@@ -27,6 +29,8 @@ const envSchema = z.object({
   CORTEX_CONVERTER_DIRECTORY: z.string().default(''),
   CORTEX_MAX_ARCHIVE_SIZE_MB: z.coerce.number().int().min(1).max(100_000).default(2048),
   CORTEX_MAX_IMPORT_FILE_SIZE_MB: z.coerce.number().int().min(1).max(100_000).default(1024),
+  CORTEX_WORKOS_CLIENT_ID: z.string().trim().default(''),
+  CORTEX_CLOUD_API_URL: z.union([z.literal(''), z.url()]).default(''),
 });
 export type MainEnv = z.infer<typeof envSchema>;
 
@@ -81,5 +85,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): MainEnv {
       (typeof __CORTEX_ENABLE_AUTO_UPDATE__ === 'string'
         ? __CORTEX_ENABLE_AUTO_UPDATE__
         : undefined),
+    CORTEX_WORKOS_CLIENT_ID:
+      source.CORTEX_WORKOS_CLIENT_ID ??
+      local.CORTEX_WORKOS_CLIENT_ID ??
+      (typeof __CORTEX_WORKOS_CLIENT_ID__ === 'string' ? __CORTEX_WORKOS_CLIENT_ID__ : undefined),
+    CORTEX_CLOUD_API_URL:
+      source.CORTEX_CLOUD_API_URL ??
+      local.CORTEX_CLOUD_API_URL ??
+      (typeof __CORTEX_CLOUD_API_URL__ === 'string' ? __CORTEX_CLOUD_API_URL__ : undefined),
   });
 }

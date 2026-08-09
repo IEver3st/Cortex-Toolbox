@@ -68,8 +68,10 @@ export interface HandlingSetup {
   modelFlags: string;
   handlingFlags: string;
   damageFlags: string;
-  aiHandling: 'AVERAGE' | 'SPORTS_CAR' | 'TRUCK' | 'OFF_ROAD' | 'NONE';
-  subHandling: 'none' | 'bike' | 'boat' | 'trailer';
+  aiHandling: string;
+  subHandling: 'none' | 'car' | 'bike' | 'boat' | 'trailer' | 'other';
+  /** Exact imported XML type, retained when Toolbox does not expose its fields yet. */
+  subHandlingType?: string;
 }
 
 export const DEFAULT_HANDLING_SETUP: HandlingSetup = {
@@ -638,6 +640,12 @@ function xmlNumber(value: number, integer = false): string {
   return integer ? String(Math.round(value)) : value.toFixed(6);
 }
 
+function trimmedValue(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export function buildHandlingXml(
   handlingName: string,
   values: HandlingValues,
@@ -648,13 +656,16 @@ export function buildHandlingXml(
       `      <${field.key} value="${xmlNumber(values[field.key], field.nativeType === 'int')}" />`,
   ).join('\n');
   const subHandlingType =
-    setup.subHandling === 'none'
+    trimmedValue(setup.subHandlingType) ??
+    (setup.subHandling === 'none' || setup.subHandling === 'other'
       ? 'NULL'
-      : setup.subHandling === 'bike'
-        ? 'CBikeHandlingData'
-        : setup.subHandling === 'boat'
-          ? 'CBoatHandlingData'
-          : 'CTrailerHandlingData';
+      : setup.subHandling === 'car'
+        ? 'CCarHandlingData'
+        : setup.subHandling === 'bike'
+          ? 'CBikeHandlingData'
+          : setup.subHandling === 'boat'
+            ? 'CBoatHandlingData'
+            : 'CTrailerHandlingData');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<CHandlingDataMgr>\n  <HandlingData>\n    <Item type="CHandlingData">\n      <handlingName>${handlingName}</handlingName>\n${fields}\n      <vecCentreOfMassOffset x="${xmlNumber(setup.centreOfMass.x)}" y="${xmlNumber(setup.centreOfMass.y)}" z="${xmlNumber(setup.centreOfMass.z)}" />\n      <vecInertiaMultiplier x="${xmlNumber(setup.inertiaMultiplier.x)}" y="${xmlNumber(setup.inertiaMultiplier.y)}" z="${xmlNumber(setup.inertiaMultiplier.z)}" />\n      <fSeatOffsetDistX value="${xmlNumber(setup.seatOffset.x)}" />\n      <fSeatOffsetDistY value="${xmlNumber(setup.seatOffset.y)}" />\n      <fSeatOffsetDistZ value="${xmlNumber(setup.seatOffset.z)}" />\n      <nMonetaryValue value="${xmlNumber(setup.monetaryValue, true)}" />\n      <strModelFlags>${setup.modelFlags}</strModelFlags>\n      <strHandlingFlags>${setup.handlingFlags}</strHandlingFlags>\n      <strDamageFlags>${setup.damageFlags}</strDamageFlags>\n      <AIHandling>${setup.aiHandling}</AIHandling>\n      <SubHandlingData>\n        <Item type="${subHandlingType}" />\n        <Item type="NULL" />\n        <Item type="NULL" />\n      </SubHandlingData>\n    </Item>\n  </HandlingData>\n</CHandlingDataMgr>\n`;
 }
 

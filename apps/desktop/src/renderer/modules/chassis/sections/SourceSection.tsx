@@ -1,4 +1,4 @@
-import { Download, Upload } from 'lucide-react';
+import { Download, FolderOpen } from 'lucide-react';
 import type { MetaFileInput } from '@cortex/vehicle-meta';
 import { CodeEditor } from '../../../components/CodeEditor';
 import { downloadText } from '../../shared/download';
@@ -10,7 +10,7 @@ export function SourceSection({
   compareMode,
   onActiveFileChange,
   onFileContentChange,
-  onImport,
+  onOpenFile,
   onToggleCompare,
 }: {
   files: MetaFileInput[];
@@ -19,7 +19,7 @@ export function SourceSection({
   compareMode: boolean;
   onActiveFileChange: (name: string) => void;
   onFileContentChange: (name: string, content: string) => void;
-  onImport: (files: FileList) => void;
+  onOpenFile: () => void;
   onToggleCompare: () => void;
 }): React.JSX.Element {
   const current = files.find((file) => file.name === activeFile) ?? files[0];
@@ -37,17 +37,10 @@ export function SourceSection({
           >
             Side-by-side diff
           </button>
-          <label className="file-pick-button compact">
-            <Upload aria-hidden="true" />
-            Import
-            <input
-              type="file"
-              accept=".meta,.xml"
-              multiple
-              hidden
-              onChange={(event) => event.target.files?.length && onImport(event.target.files)}
-            />
-          </label>
+          <button type="button" onClick={onOpenFile}>
+            <FolderOpen aria-hidden="true" />
+            Open file
+          </button>
           {current ? (
             <button
               type="button"

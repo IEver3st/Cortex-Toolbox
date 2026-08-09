@@ -29,12 +29,14 @@ export function Select<T extends string>({
   options,
   onChange,
   disabled = false,
+  ariaLabel,
 }: {
   id: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
   disabled?: boolean;
+  ariaLabel?: string;
 }): React.JSX.Element {
   const listboxId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -177,7 +179,8 @@ export function Select<T extends string>({
             ref={menuRef}
             id={listboxId}
             role="listbox"
-            aria-labelledby={`${id}-label`}
+            aria-label={ariaLabel}
+            aria-labelledby={ariaLabel ? undefined : `${id}-label`}
             className={['settings-select-menu', prefersReducedMotion() ? 'is-instant' : '']
               .filter(Boolean)
               .join(' ')}
@@ -222,7 +225,8 @@ export function Select<T extends string>({
         aria-controls={listboxId}
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-labelledby={`${id}-label`}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabel ? undefined : `${id}-label`}
         disabled={disabled}
         onClick={() => (open ? close() : openMenu())}
         onKeyDown={onTriggerKeyDown}

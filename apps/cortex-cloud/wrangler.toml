@@ -1,0 +1,9 @@
+name = "cortex-cloud"
+main = "src/index.ts"
+compatibility_date = "2026-08-08"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cortex-cloud"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"

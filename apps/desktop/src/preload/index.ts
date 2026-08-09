@@ -5,6 +5,9 @@ import { fail, fromUnknown } from '@cortex/core/result';
 import {
   channels,
   ipcDefinitions,
+  aiStreamEvent,
+  accountChangedEvent,
+  accountStatusSchema,
   updateStatusSchema,
   updatesChangedEvent,
   type Channel,
@@ -12,6 +15,7 @@ import {
   type IpcRequest,
   type IpcResponse,
 } from '../shared/contracts';
+import { aiStreamEventSchema } from '@cortex/ai/contracts';
 
 async function invoke<C extends Channel>(
   channel: C,
@@ -56,8 +60,10 @@ const api: CortexApi = {
   },
   files: {
     list: () => invoke(channels.filesList, {}),
+    pickHandling: () => invoke(channels.filesPickHandling, {}),
     read: (input) => invoke(channels.filesRead, input),
     planWrite: (input) => invoke(channels.filesPlanWrite, input),
+    planCreateHandling: (input) => invoke(channels.filesPlanCreateHandling, input),
     applyWrite: (input) => invoke(channels.filesApplyWrite, input),
   },
   resources: {
@@ -86,6 +92,40 @@ const api: CortexApi = {
   settings: {
     get: () => invoke(channels.settingsGet, {}),
     set: (input) => invoke(channels.settingsSet, input),
+  },
+  ai: {
+    models: () => invoke(channels.aiModels, {}),
+    credentialStatus: () => invoke(channels.aiCredentialStatus, {}),
+    setCredential: (input) => invoke(channels.aiCredentialSet, input),
+    removeCredential: () => invoke(channels.aiCredentialRemove, {}),
+    testProvider: () => invoke(channels.aiProviderTest, {}),
+    startChat: (input) => invoke(channels.aiChatStart, input),
+    cancelChat: (input) => invoke(channels.aiChatCancel, input),
+    planProposal: (input) => invoke(channels.aiPlanProposal, input),
+    applyProposal: (input) => invoke(channels.aiApplyProposal, input),
+    onStream: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, raw: unknown) => {
+        const parsed = aiStreamEventSchema.safeParse(raw);
+        if (parsed.success) listener(parsed.data);
+      };
+      ipcRenderer.on(aiStreamEvent, handler);
+      return () => ipcRenderer.removeListener(aiStreamEvent, handler);
+    },
+  },
+  account: {
+    status: () => invoke(channels.accountStatus, {}),
+    signIn: () => invoke(channels.accountSignIn, {}),
+    signOut: () => invoke(channels.accountSignOut, {}),
+    checkout: (input) => invoke(channels.accountCheckout, input),
+    portal: () => invoke(channels.accountPortal, {}),
+    onChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, raw: unknown) => {
+        const parsed = accountStatusSchema.safeParse(raw);
+        if (parsed.success) listener(parsed.data);
+      };
+      ipcRenderer.on(accountChangedEvent, handler);
+      return () => ipcRenderer.removeListener(accountChangedEvent, handler);
+    },
   },
   updates: {
     status: () => invoke(channels.updatesStatus, {}),

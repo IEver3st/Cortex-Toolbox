@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Home, PackageCheck, Settings, Download } from 'lucide-react';
+import { BrainCircuit, Home, PackageCheck, Settings, Download } from 'lucide-react';
 import { m } from 'motion/react';
 import { useMemo } from 'react';
 import type { ModuleId } from '../../shared/modules';
@@ -13,6 +13,7 @@ import { MODULE_ICONS } from '../modules/registry';
 import { useUpdateStatus } from '../hooks/useUpdateStatus';
 import { usePreferences } from '../hooks/usePreferences';
 import { toast } from 'sonner';
+import { useAiStore } from '../ai/ai-store';
 
 const systemLabels: Partial<Record<EditorTab['kind'], string>> = {
   welcome: 'Workspace overview',
@@ -49,6 +50,9 @@ export function ActivityRail(): React.JSX.Element {
   );
   const preferences = usePreferences();
   const experimental = preferences.data?.experimentalTools === true;
+  const aiEnabled = preferences.data?.aiEnabled === true;
+  const aiPanelOpen = useAiStore((state) => state.panelOpen);
+  const setAiPanelOpen = useAiStore((state) => state.setPanelOpen);
 
   const modulesByCategory = useMemo(
     () =>
@@ -198,6 +202,24 @@ export function ActivityRail(): React.JSX.Element {
           </div>
         ) : null}
         <div className="sidebar-footer-bar">
+          {aiEnabled && workspace ? (
+            <Tooltip
+              content="Cortex AI"
+              shortcut="Ctrl+L"
+              side={sidebarCollapsed ? 'right' : 'top'}
+            >
+              <m.button
+                type="button"
+                className={aiPanelOpen ? 'active sidebar-utility-icon' : 'sidebar-utility-icon'}
+                onClick={() => setAiPanelOpen(!aiPanelOpen)}
+                aria-label="Cortex AI"
+                aria-expanded={aiPanelOpen}
+                {...iconInteraction(reduced)}
+              >
+                <BrainCircuit aria-hidden="true" />
+              </m.button>
+            </Tooltip>
+          ) : null}
           <Tooltip content="Settings" side={sidebarCollapsed ? 'right' : 'top'}>
             <m.button
               type="button"

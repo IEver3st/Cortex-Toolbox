@@ -24,6 +24,34 @@ describe('IPC contracts', () => {
         excludes: [],
       }).success,
     ).toBe(false));
+  it('does not expose an IPC path for forging account identity or entitlement', () => {
+    expect(
+      ipcDefinitions[channels.accountSignIn].request.safeParse({ userId: 'forged', plan: 'pro' })
+        .success,
+    ).toBe(false);
+    expect(
+      ipcDefinitions[channels.accountCheckout].request.safeParse({
+        cadence: 'monthly',
+        plan: 'pro',
+        checkoutSuccess: true,
+      }).success,
+    ).toBe(false);
+  });
+  it('keeps handling creation on a dedicated strict write-planning contract', () => {
+    expect(
+      ipcDefinitions[channels.filesPlanCreateHandling].request.safeParse({
+        relativePath: 'data/handling.meta',
+        source: '<CHandlingDataMgr />',
+      }).success,
+    ).toBe(true);
+    expect(
+      ipcDefinitions[channels.filesPlanCreateHandling].request.safeParse({
+        relativePath: 'data/handling.meta',
+        source: '<CHandlingDataMgr />',
+        overwrite: true,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('preference migration', () => {

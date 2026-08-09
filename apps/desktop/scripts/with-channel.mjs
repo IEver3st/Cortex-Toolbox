@@ -6,7 +6,9 @@ import { spawnSync } from 'node:child_process';
 
 const [channel, command, ...args] = process.argv.slice(2);
 if (!channel || !command) {
-  console.error('Usage: node ./scripts/with-channel.mjs <stable|beta|development> <command> [args...]');
+  console.error(
+    'Usage: node ./scripts/with-channel.mjs <stable|beta|development> <command> [args...]',
+  );
   process.exit(1);
 }
 

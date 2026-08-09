@@ -3,6 +3,7 @@ import {
   Accessibility,
   ArrowLeft,
   Blocks,
+  Bot,
   Bug,
   Code2,
   Gauge,
@@ -12,6 +13,7 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -52,11 +54,15 @@ import {
   useUpdateStatus,
 } from '../hooks/useUpdateStatus';
 import { PREFERENCES_QUERY_KEY, usePreferences } from '../hooks/usePreferences';
+import { AiSettingsPanel } from './settings/AiSettingsPanel';
+import { AccountSettingsPanel } from './settings/AccountSettingsPanel';
 
 type SectionId =
   | 'general'
   | 'appearance'
   | 'editor'
+  | 'account'
+  | 'ai'
   | 'modules'
   | 'sidebar'
   | 'accessibility'
@@ -83,6 +89,18 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: 'Accessibility',
         icon: Accessibility,
         keywords: 'motion reduce cursor',
+      },
+    ],
+  },
+  {
+    label: 'Cortex',
+    items: [
+      { id: 'account', label: 'Account', icon: UserRound, keywords: 'sign in plan billing usage' },
+      {
+        id: 'ai',
+        label: 'AI',
+        icon: Bot,
+        keywords: 'cortex openrouter model workspace access privacy',
       },
     ],
   },
@@ -127,6 +145,8 @@ const TITLES: Record<SectionId, string> = {
   general: 'General',
   appearance: 'Appearance',
   editor: 'Editor',
+  account: 'Account',
+  ai: 'AI',
   modules: 'Modules',
   sidebar: 'Sidebar',
   accessibility: 'Accessibility',
@@ -136,6 +156,8 @@ const TITLES: Record<SectionId, string> = {
 };
 
 const SECTION_LEAD: Partial<Record<SectionId, string>> = {
+  account: 'Optional identity and managed AI access. Toolbox itself never requires an account.',
+  ai: 'Choose whether Cortex AI exists in your workbench and exactly what it may do.',
   privacy:
     'How Cortex handles files, network access, and external tools on this device. These guarantees are built in and cannot be turned off.',
   support:
@@ -442,7 +464,17 @@ export function SettingsView(): React.JSX.Element {
     setDraft(normalizePreferences({ ...DEFAULT_PREFERENCES, installedModules: installed }));
     setResetArmed(false);
   };
-  const goBack = () => activate(lastWorkbenchTab);
+  const goBack = () => {
+    if (!dirty) {
+      activate(lastWorkbenchTab);
+      return;
+    }
+    void persistDraft(draft)
+      .then(() => activate(lastWorkbenchTab))
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : 'Could not save settings.');
+      });
+  };
 
   const toggleModule = async (id: ModuleId, enabled: boolean) => {
     setPendingModuleId(id);
@@ -621,6 +653,17 @@ export function SettingsView(): React.JSX.Element {
               </SettingsGroup>
             ) : null}
 
+            {active === 'account' ? <AccountSettingsPanel SettingsGroup={SettingsGroup} /> : null}
+
+            {active === 'ai' ? (
+              <AiSettingsPanel
+                draft={draft}
+                update={update}
+                SettingsGroup={SettingsGroup}
+                Row={Row}
+              />
+            ) : null}
+
             {active === 'modules' ? (
               <SettingsGroup title="Available modules">
                 <p className="settings-note">
@@ -788,6 +831,18 @@ export function SettingsView(): React.JSX.Element {
             {active === 'privacy' ? (
               <>
                 <SettingsGroup title="Data handling">
+                  <StatusRow
+                    label="Cortex AI"
+                    description={
+                      draft.aiEnabled
+                        ? draft.aiProvider === 'openrouter'
+                          ? 'Requests are sent directly to OpenRouter using your encrypted key.'
+                          : 'Only requested context is sent to the Cortex AI service and selected provider.'
+                        : 'No workspace content is sent to AI providers.'
+                    }
+                    status={draft.aiEnabled ? 'Enabled' : 'Disabled'}
+                    statusTone={draft.aiEnabled ? 'muted' : 'success'}
+                  />
                   <StatusRow
                     label="Project files"
                     description="Read only from the workspace you choose."

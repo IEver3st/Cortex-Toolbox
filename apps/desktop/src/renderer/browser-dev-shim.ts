@@ -61,7 +61,7 @@ export function installBrowserDevShim(): void {
   if (!import.meta.env.DEV) return;
   // contextBridge exposes window.cortex without passing Object.hasOwn — probing the API avoids
   // clobbering the real preload bridge in the Electron dev window.
-  if (typeof window.cortex.projects.open === 'function') return;
+  if (Object.hasOwn(window, 'cortex') && typeof window.cortex.projects.open === 'function') return;
 
   const api: CortexApi = {
     projects: {
@@ -79,8 +79,10 @@ export function installBrowserDevShim(): void {
     },
     files: {
       list: async () => ok([]),
+      pickHandling: async () => browserOnly(),
       read: async () => browserOnly(),
       planWrite: async () => browserOnly(),
+      planCreateHandling: async () => browserOnly(),
       applyWrite: async () => browserOnly(),
     },
     resources: {
@@ -117,6 +119,36 @@ export function installBrowserDevShim(): void {
         };
         return ok(preferences);
       },
+    },
+    ai: {
+      models: async () => ok([]),
+      credentialStatus: async () => ok({ configured: false, encryptionAvailable: false }),
+      setCredential: async () => browserOnly(),
+      removeCredential: async () => ok(true),
+      testProvider: async () => browserOnly(),
+      startChat: async () => browserOnly(),
+      cancelChat: async () => ok(true),
+      planProposal: async () => browserOnly(),
+      applyProposal: async () => browserOnly(),
+      onStream: () => () => undefined,
+    },
+    account: {
+      status: async () =>
+        ok({
+          configured: false,
+          cloudConfigured: false,
+          status: 'unconfigured' as const,
+          identity: null,
+          plan: null,
+          usage: null,
+          billing: null,
+          message: null,
+        }),
+      signIn: async () => browserOnly(),
+      signOut: async () => ok(true),
+      checkout: async () => browserOnly(),
+      portal: async () => browserOnly(),
+      onChanged: () => () => undefined,
     },
     updates: {
       status: async () =>

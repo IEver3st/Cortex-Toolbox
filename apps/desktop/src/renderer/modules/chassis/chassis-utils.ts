@@ -6,8 +6,10 @@ import {
   type HandlingFieldDefinition,
   type HandlingPresetId,
   type HandlingValues,
+  type HandlingSetup,
   type MetaFileInput,
 } from '@cortex/vehicle-meta';
+import type { AiChangeProposal } from '@cortex/ai';
 import type {
   BehaviorProfile,
   FieldChange,
@@ -29,14 +31,13 @@ export const SECTION_LABELS = {
 } as const;
 
 export const HANDLING_CATEGORY_LABELS: Record<HandlingWorkbenchCategory, string> = {
+  physical: 'Physical',
   powertrain: 'Powertrain',
-  grip: 'Grip',
-  steering: 'Steering',
-  brakes: 'Brakes',
+  braking: 'Braking',
+  traction: 'Traction',
   suspension: 'Suspension',
-  aero: 'Aero',
-  damage: 'Damage and fluids',
-  advanced: 'Advanced values',
+  damage: 'Damage',
+  advanced: 'Advanced',
 };
 
 const FIELD_WORKBENCH_CATEGORY: Partial<
@@ -49,18 +50,18 @@ const FIELD_WORKBENCH_CATEGORY: Partial<
   fClutchChangeRateScaleUpShift: 'powertrain',
   fClutchChangeRateScaleDownShift: 'powertrain',
   fInitialDriveMaxFlatVel: 'powertrain',
-  fSteeringLock: 'steering',
-  fTractionCurveMax: 'grip',
-  fTractionCurveMin: 'grip',
-  fTractionCurveLateral: 'grip',
-  fTractionSpringDeltaMax: 'advanced',
-  fLowSpeedTractionLossMult: 'grip',
-  fCamberStiffnesss: 'advanced',
-  fTractionBiasFront: 'grip',
-  fTractionLossMult: 'grip',
-  fBrakeForce: 'brakes',
-  fBrakeBiasFront: 'brakes',
-  fHandBrakeForce: 'brakes',
+  fSteeringLock: 'traction',
+  fTractionCurveMax: 'traction',
+  fTractionCurveMin: 'traction',
+  fTractionCurveLateral: 'traction',
+  fTractionSpringDeltaMax: 'traction',
+  fLowSpeedTractionLossMult: 'traction',
+  fCamberStiffnesss: 'traction',
+  fTractionBiasFront: 'traction',
+  fTractionLossMult: 'traction',
+  fBrakeForce: 'braking',
+  fBrakeBiasFront: 'braking',
+  fHandBrakeForce: 'braking',
   fSuspensionForce: 'suspension',
   fSuspensionCompDamp: 'suspension',
   fSuspensionReboundDamp: 'suspension',
@@ -70,17 +71,17 @@ const FIELD_WORKBENCH_CATEGORY: Partial<
   fSuspensionBiasFront: 'suspension',
   fAntiRollBarForce: 'suspension',
   fAntiRollBarBiasFront: 'suspension',
-  fRollCentreHeightFront: 'advanced',
-  fRollCentreHeightRear: 'advanced',
-  fInitialDragCoeff: 'aero',
-  fDownforceModifier: 'aero',
-  fMass: 'advanced',
+  fRollCentreHeightFront: 'suspension',
+  fRollCentreHeightRear: 'suspension',
+  fInitialDragCoeff: 'physical',
+  fDownforceModifier: 'physical',
+  fMass: 'physical',
   fCollisionDamageMult: 'damage',
   fWeaponDamageMult: 'damage',
   fDeformationDamageMult: 'damage',
   fEngineDamageMult: 'damage',
-  fPetrolTankVolume: 'damage',
-  fOilVolume: 'damage',
+  fPetrolTankVolume: 'advanced',
+  fOilVolume: 'advanced',
 };
 
 const BALANCE_FIELDS = new Set<HandlingFieldDefinition['key']>([
@@ -110,6 +111,54 @@ export function fieldsForWorkbenchCategory(
 
 export function isBalanceField(key: HandlingFieldDefinition['key']): boolean {
   return BALANCE_FIELDS.has(key);
+}
+
+export function applyAiHandlingPatch(input: {
+  proposal: AiChangeProposal;
+  activePath: string;
+  handlingName: string;
+  handling: HandlingValues;
+  setup: HandlingSetup;
+}): { handling: HandlingValues; setup: HandlingSetup; attributed: Set<string> } | null {
+  const patch = input.proposal.handlingPatch;
+  if (!patch) return null;
+  if (
+    patch.relativePath.replaceAll('\\', '/') !== input.activePath.replaceAll('\\', '/') ||
+    patch.handlingName.toLowerCase() !== input.handlingName.toLowerCase()
+  ) {
+    return null;
+  }
+  const handling = { ...input.handling };
+  const setup: HandlingSetup = {
+    ...input.setup,
+    centreOfMass: { ...input.setup.centreOfMass },
+    inertiaMultiplier: { ...input.setup.inertiaMultiplier },
+    seatOffset: { ...input.setup.seatOffset },
+  };
+  const attributed = new Set<string>();
+  for (const [key, value] of Object.entries(patch.values)) {
+    if (!Number.isFinite(value)) return null;
+    if (key in handling) {
+      handling[key as keyof HandlingValues] = value;
+      attributed.add(key);
+      continue;
+    }
+    const vectorMatch = /^(centreOfMass|inertiaMultiplier|seatOffset)\.(x|y|z)$/.exec(key);
+    if (vectorMatch) {
+      const vector = vectorMatch[1] as 'centreOfMass' | 'inertiaMultiplier' | 'seatOffset';
+      const axis = vectorMatch[2] as 'x' | 'y' | 'z';
+      setup[vector][axis] = value;
+      attributed.add(key);
+      continue;
+    }
+    if (key === 'monetaryValue') {
+      setup.monetaryValue = Math.round(value);
+      attributed.add(key);
+      continue;
+    }
+    return null;
+  }
+  return { handling, setup, attributed };
 }
 
 export function formatDrive(bias: number): string {

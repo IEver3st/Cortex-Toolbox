@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Command } from 'cmdk';
-import { FileCode2, FolderOpen, FolderX, Search } from 'lucide-react';
+import { BrainCircuit, FileCode2, FolderOpen, FolderX, Search } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { MODULE_BY_ID } from '../../shared/modules';
 import {
@@ -13,6 +13,8 @@ import {
 import { MODULE_ICONS } from '../modules/registry';
 import { useModuleStore } from '../store/modules';
 import { useWorkspaceStore } from '../store/workspace';
+import { usePreferences } from '../hooks/usePreferences';
+import { useAiStore } from '../ai/ai-store';
 
 export function CommandPalette(): React.JSX.Element {
   const reduced = useReducedMotion();
@@ -24,6 +26,8 @@ export function CommandPalette(): React.JSX.Element {
   const files = useWorkspaceStore((state) => state.files);
   const workspace = useWorkspaceStore((state) => state.workspace);
   const installed = useModuleStore((state) => state.installed);
+  const aiEnabled = usePreferences().data?.aiEnabled === true;
+  const setAiPanelOpen = useAiStore((state) => state.setPanelOpen);
   const run = (action: () => void) => {
     action();
     setPalette(false);
@@ -95,6 +99,69 @@ export function CommandPalette(): React.JSX.Element {
                         </Command.Item>
                       ) : null}
                     </Command.Group>
+                    {aiEnabled && workspace ? (
+                      <Command.Group heading="Cortex AI">
+                        <Command.Item
+                          value="cortex ai open"
+                          onSelect={() => run(() => setAiPanelOpen(true))}
+                        >
+                          <BrainCircuit />
+                          <span>Open Cortex AI</span>
+                        </Command.Item>
+                        <Command.Item
+                          value="cortex ai new chat"
+                          onSelect={() =>
+                            run(() => {
+                              useAiStore.getState().newThread(workspace.root);
+                              setAiPanelOpen(true);
+                            })
+                          }
+                        >
+                          <BrainCircuit />
+                          <span>New AI conversation</span>
+                        </Command.Item>
+                        <Command.Item
+                          value="cortex ai ask current file"
+                          disabled={
+                            !useWorkspaceStore
+                              .getState()
+                              .tabs.find(
+                                (item) => item.id === useWorkspaceStore.getState().activeTab,
+                              )?.relativePath
+                          }
+                          onSelect={() =>
+                            run(() =>
+                              window.dispatchEvent(
+                                new CustomEvent('cortex-ai:ask', {
+                                  detail: { prompt: 'Inspect and explain the active file.' },
+                                }),
+                              ),
+                            )
+                          }
+                        >
+                          <FileCode2 />
+                          <span>Ask about current file</span>
+                        </Command.Item>
+                        <Command.Item
+                          value="cortex ai diagnose workspace"
+                          onSelect={() =>
+                            run(() =>
+                              window.dispatchEvent(
+                                new CustomEvent('cortex-ai:ask', {
+                                  detail: {
+                                    prompt:
+                                      'Diagnose this workspace using deterministic Toolbox diagnostics first.',
+                                  },
+                                }),
+                              ),
+                            )
+                          }
+                        >
+                          <BrainCircuit />
+                          <span>Diagnose workspace</span>
+                        </Command.Item>
+                      </Command.Group>
+                    ) : null}
                     <Command.Group heading="Modules">
                       {installed.map((id) => {
                         const module = MODULE_BY_ID[id];

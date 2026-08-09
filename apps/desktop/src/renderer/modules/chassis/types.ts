@@ -5,7 +5,7 @@ export type ChassisSection =
   'overview' | 'handling' | 'vehicle-setup' | 'appearance' | 'relationships' | 'source';
 
 export type HandlingWorkbenchCategory =
-  'powertrain' | 'grip' | 'steering' | 'brakes' | 'suspension' | 'aero' | 'damage' | 'advanced';
+  'physical' | 'powertrain' | 'braking' | 'traction' | 'suspension' | 'damage' | 'advanced';
 
 export type PresetId = HandlingPresetId | 'custom';
 

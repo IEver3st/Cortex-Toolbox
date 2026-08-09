@@ -8,6 +8,7 @@ import {
 } from './handling';
 
 export * from './handling';
+export * from './handling-document';
 export * from './diagnose';
 export * from './schema';
 export {

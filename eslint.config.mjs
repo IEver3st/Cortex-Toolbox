@@ -17,6 +17,8 @@ export default defineConfig(
       'examples/**',
       'playwright-report/**',
       'test-results/**',
+      // User-owned reference playground; it is not a pnpm workspace package.
+      'DeepseekTest/**',
     ],
   },
   eslint.configs.recommended,
@@ -38,10 +40,17 @@ export default defineConfig(
     },
   },
   {
-    files: [
-      'packages/script-analysis/src/probe-findings.ts',
-      'packages/vehicle-meta/src/**/*.ts',
-    ],
+    files: ['apps/cortex-cloud/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: ['./apps/cortex-cloud/tsconfig.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: { ...globals.worker },
+    },
+  },
+  {
+    files: ['packages/script-analysis/src/probe-findings.ts', 'packages/vehicle-meta/src/**/*.ts'],
     rules: {
       // These parsers bounds-check captures and indexed tables before access. TypeScript cannot
       // preserve those control-flow guarantees through the parser helpers and nested loops.

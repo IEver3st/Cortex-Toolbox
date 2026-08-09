@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { access, constants, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { access, constants, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import {
   app,
   BrowserWindow,
@@ -55,6 +55,10 @@ import {
   writeJsonExport,
 } from './workspace-insights';
 import { GitHubBugReportService, type DiagnosticsService } from './diagnostics-service';
+import { CortexAiService } from './ai/ai-service';
+import { resolveAiWorkspaceFile } from './ai/workspace-sandbox';
+import type { CortexAuthService } from './auth-service';
+import { applyTextWriteTransaction } from './ai/write-transaction';
 
 const workspace = new WorkspaceService();
 const jobs = new JobQueue();
@@ -63,6 +67,7 @@ interface PendingTextPlan {
   relativePath: string;
   source: string;
   beforeHash: string | null;
+  allowCreate: boolean;
   createdAt: number;
 }
 
@@ -96,34 +101,75 @@ function assertEditableTextPath(relativePath: string): void {
   }
 }
 
-async function applyPendingTextPlan(planId: string) {
-  const pending = pendingPlans.get(planId);
-  if (!pending) throw new Error('This change plan expired. Review the changes again.');
-  pendingPlans.delete(planId);
-  if (Date.now() - pending.createdAt > PENDING_PLAN_TTL_MS) {
-    throw new Error('This change plan expired. Review the changes again.');
-  }
+interface PreflightTextPlan extends PendingTextPlan {
+  planId: string;
+  originalSource: string | null;
+}
+
+async function preflightPendingTextPlans(planIds: string[]): Promise<PreflightTextPlan[]> {
+  if (new Set(planIds).size !== planIds.length) throw new Error('A change plan was repeated.');
   const active = workspace.require();
-  if (active.root !== pending.root)
-    throw new Error('The active workspace changed after this plan was created.');
-  const target = assertWithinRoot(
-    pending.root,
-    path.join(pending.root, normalizeRelative(pending.relativePath)),
+  const checked: PreflightTextPlan[] = [];
+  const relativePaths = new Set<string>();
+  for (const planId of planIds) {
+    const pending = pendingPlans.get(planId);
+    if (!pending) throw new Error('This change plan expired. Review the changes again.');
+    if (Date.now() - pending.createdAt > PENDING_PLAN_TTL_MS) {
+      pendingPlans.delete(planId);
+      throw new Error('This change plan expired. Review the changes again.');
+    }
+    if (active.root !== pending.root) {
+      throw new Error('The active workspace changed after this plan was created.');
+    }
+    if (relativePaths.has(pending.relativePath)) {
+      throw new Error(`Multiple plans target ${pending.relativePath}.`);
+    }
+    relativePaths.add(pending.relativePath);
+    const target = assertWithinRoot(
+      pending.root,
+      path.join(pending.root, normalizeRelative(pending.relativePath)),
+    );
+    let originalSource: string | null = null;
+    try {
+      originalSource = await readFile(target, 'utf8');
+    } catch (error) {
+      if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+      if (!pending.allowCreate || pending.beforeHash !== null) {
+        throw new Error('This reviewed change may only modify an existing file.', { cause: error });
+      }
+    }
+    const currentHash =
+      originalSource === null ? null : createHash('sha256').update(originalSource).digest('hex');
+    if (currentHash !== pending.beforeHash) {
+      throw new Error(
+        'The file changed after this plan was reviewed. Review the latest file first.',
+      );
+    }
+    checked.push({ ...pending, planId, originalSource });
+  }
+  return checked;
+}
+
+async function applyPendingTextPlans(planIds: string[]) {
+  const checked = await preflightPendingTextPlans(planIds);
+  for (const pending of checked) pendingPlans.delete(pending.planId);
+  const results = await applyTextWriteTransaction(
+    checked,
+    safeWriteText,
+    async (root, relativePath) => {
+      const target = assertWithinRoot(root, path.join(root, normalizeRelative(relativePath)));
+      await unlink(target);
+    },
   );
-  let currentHash: string | null = null;
-  try {
-    currentHash = createHash('sha256')
-      .update(await readFile(target))
-      .digest('hex');
-  } catch (error) {
-    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
-  }
-  if (currentHash !== pending.beforeHash) {
-    throw new Error('The file changed after this plan was reviewed. Review the latest file first.');
-  }
-  const result = await safeWriteText(pending.root, pending.relativePath, pending.source);
+  const active = workspace.require();
   workspace.invalidateFiles();
   await workspace.open(active.root);
+  return results;
+}
+
+async function applyPendingTextPlan(planId: string) {
+  const [result] = await applyPendingTextPlans([planId]);
+  if (!result) throw new Error('The change plan did not produce a write result.');
   return result;
 }
 
@@ -132,6 +178,7 @@ function rememberPendingPlan(
   root: string,
   relativePath: string,
   source: string,
+  options: { allowCreate?: boolean } = {},
 ): void {
   const entry = plan.entries[0];
   if (!entry) throw new Error('The change plan did not contain a file entry.');
@@ -148,6 +195,7 @@ function rememberPendingPlan(
     relativePath,
     source,
     beforeHash: entry.beforeHash,
+    allowCreate: options.allowCreate === true,
     createdAt: Date.now(),
   });
 }
@@ -173,6 +221,7 @@ const settings = new Store<{
 });
 
 let updates: UpdateService | null = null;
+let aiSessionAccessRoot: string | null = null;
 
 export function getUpdateService(): UpdateService | null {
   return updates;
@@ -181,12 +230,20 @@ export function getUpdateService(): UpdateService | null {
 export function readPreferences(): Preferences {
   try {
     const stored = settings.get('preferences');
-    const value = normalizePreferences(stored);
+    const normalized = normalizePreferences(stored);
+    // Session-level AI write access is intentionally never durable. Repair any
+    // older persisted value and overlay it only while the same workspace remains open.
+    const value =
+      normalized.aiWorkspaceAccess === 'allow-session'
+        ? { ...normalized, aiWorkspaceAccess: 'ask-before-changes' as const }
+        : normalized;
     // Repair the on-disk store when keys are missing or invalid so future reads stay clean.
     if (JSON.stringify(stored) !== JSON.stringify(value)) {
       settings.set('preferences', value);
     }
-    return value;
+    return aiSessionAccessRoot && workspace.current()?.root === aiSessionAccessRoot
+      ? { ...value, aiWorkspaceAccess: 'allow-session' }
+      : value;
   } catch {
     try {
       settings.set('preferences', { ...DEFAULT_PREFERENCES });
@@ -390,7 +447,11 @@ async function planPackage(
   return { entries, gate };
 }
 
-export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void {
+export function registerIpc(
+  env: MainEnv,
+  diagnostics: DiagnosticsService,
+  cortexAuth: CortexAuthService,
+): void {
   updates = new UpdateService(env, readPreferences);
   const bugReports = new GitHubBugReportService(env, diagnostics, () => ({
     appVersion: app.getVersion(),
@@ -401,6 +462,21 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
     nodeVersion: process.versions.node,
     workspaceOpen: workspace.current() !== null,
   }));
+  const cortexAi = new CortexAiService(
+    readPreferences,
+    () => workspace.require().root,
+    () => workspace.files(),
+    async (relativePath, source) => {
+      const active = workspace.require();
+      const resolved = await resolveAiWorkspaceFile(active.root, relativePath, { mustExist: true });
+      assertEditableTextPath(resolved.relativePath);
+      const plan = await planTextWrite(active.root, resolved.relativePath, source);
+      rememberPendingPlan(plan, active.root, resolved.relativePath, source);
+      return plan.id;
+    },
+    () => cortexAuth.accessToken(),
+    env.CORTEX_CLOUD_API_URL,
+  );
   void updates.restorePendingDownload().then(() => updates?.initialize());
   register(channels.projectsCreate, async (event, request) => {
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -476,6 +552,7 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
   );
   register(channels.projectsCurrent, () => ok(workspace.current()));
   register(channels.projectsClose, () => {
+    aiSessionAccessRoot = null;
     workspace.close();
     return ok(null);
   });
@@ -538,6 +615,32 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
       guarded(() => workspace.files(), 'FILE_LIST_FAILED') as Promise<IpcResponse<'files:list'>>,
   );
   register(
+    channels.filesPickHandling,
+    () =>
+      guarded(async () => {
+        const active = workspace.require();
+        const selected = await dialog.showOpenDialog({
+          title: 'Open handling.meta',
+          defaultPath: active.root,
+          properties: ['openFile'],
+          filters: [
+            { name: 'FiveM handling metadata', extensions: ['meta', 'xml'] },
+            { name: 'All files', extensions: ['*'] },
+          ],
+        });
+        if (selected.canceled || !selected.filePaths[0]) return null;
+        const target = assertWithinRoot(active.root, selected.filePaths[0]);
+        const relativePath = normalizeRelative(path.relative(active.root, target));
+        assertEditableTextPath(relativePath);
+        const info = await stat(target);
+        if (!info.isFile()) throw new Error('The selected path is not a file.');
+        if (info.size > MAX_FILE_READ_BYTES) {
+          throw new Error('This file is larger than the 10 MB in-app read limit.');
+        }
+        return { content: await readFile(target, 'utf8'), relativePath, readOnly: false as const };
+      }, 'FILE_PICK_FAILED') as Promise<IpcResponse<'files:pick-handling'>>,
+  );
+  register(
     channels.filesRead,
     (_event, request) =>
       guarded(async () => {
@@ -570,6 +673,35 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
         rememberPendingPlan(plan, active.root, relativePath, request.source);
         return plan;
       }, 'CHANGE_PLAN_FAILED') as Promise<IpcResponse<'files:plan-write'>>,
+  );
+  register(
+    channels.filesPlanCreateHandling,
+    (_event, request) =>
+      guarded(async () => {
+        const active = workspace.require();
+        const relativePath = normalizeRelative(request.relativePath);
+        if (path.basename(relativePath).toLowerCase() !== 'handling.meta') {
+          throw new Error('New Chassis documents must be named handling.meta.');
+        }
+        assertEditableTextPath(relativePath);
+        const target = assertWithinRoot(active.root, path.join(active.root, relativePath));
+        try {
+          await access(target, constants.F_OK);
+          throw new Error(`${relativePath} already exists. Open it instead of replacing it.`);
+        } catch (error) {
+          if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
+            throw error;
+          }
+        }
+        const plan = await planTextWrite(active.root, relativePath, request.source);
+        if (plan.entries[0]?.kind !== 'create') {
+          throw new Error('The handling file appeared before the create plan was prepared.');
+        }
+        rememberPendingPlan(plan, active.root, relativePath, request.source, {
+          allowCreate: true,
+        });
+        return plan;
+      }, 'CHANGE_PLAN_FAILED') as Promise<IpcResponse<'files:plan-create-handling'>>,
   );
   register(
     channels.filesApplyWrite,
@@ -852,13 +984,114 @@ export function registerIpc(env: MainEnv, diagnostics: DiagnosticsService): void
   register(channels.settingsSet, (event, request) => {
     try {
       const value = normalizePreferences(request);
-      settings.set('preferences', value);
-      applyReleaseBranchBranding(value);
+      if (value.aiWorkspaceAccess === 'allow-session') {
+        const active = workspace.current();
+        if (!active) throw new Error('Open a workspace before granting session edit access.');
+        aiSessionAccessRoot = active.root;
+      } else {
+        aiSessionAccessRoot = null;
+      }
+      const durable = {
+        ...value,
+        aiWorkspaceAccess:
+          value.aiWorkspaceAccess === 'allow-session'
+            ? ('ask-before-changes' as const)
+            : value.aiWorkspaceAccess,
+      };
+      settings.set('preferences', durable);
+      applyReleaseBranchBranding(durable);
       return ok(value);
     } catch (error: unknown) {
       return fail(fromUnknown(error, 'SETTINGS_WRITE_FAILED'));
     }
   });
+  register(
+    channels.aiModels,
+    () => guarded(() => cortexAi.models(), 'AI_MODELS_FAILED') as Promise<IpcResponse<'ai:models'>>,
+  );
+  register(channels.aiCredentialStatus, () => ok(cortexAi.credentialStatus()));
+  register(channels.aiCredentialSet, (_event, request) => {
+    try {
+      return ok(cortexAi.setCredential(request.apiKey));
+    } catch (error) {
+      return fail(fromUnknown(error, 'AI_CREDENTIAL_WRITE_FAILED'));
+    }
+  });
+  register(channels.aiCredentialRemove, () => {
+    try {
+      return ok(cortexAi.removeCredential());
+    } catch (error) {
+      return fail(fromUnknown(error, 'AI_CREDENTIAL_REMOVE_FAILED'));
+    }
+  });
+  register(
+    channels.aiProviderTest,
+    () =>
+      guarded(() => cortexAi.testProvider(), 'AI_PROVIDER_TEST_FAILED') as Promise<
+        IpcResponse<'ai:provider-test'>
+      >,
+  );
+  register(channels.aiChatStart, (event, request) => {
+    try {
+      return ok({ runId: cortexAi.start(request, event.sender) });
+    } catch (error) {
+      return fail(fromUnknown(error, 'AI_CHAT_START_FAILED'));
+    }
+  });
+  register(channels.aiChatCancel, (_event, request) => ok(cortexAi.cancel(request.runId)));
+  register(
+    channels.aiPlanProposal,
+    (_event, request) =>
+      guarded(() => cortexAi.planProposal(request.proposal), 'AI_PROPOSAL_PLAN_FAILED') as Promise<
+        IpcResponse<'ai:plan-proposal'>
+      >,
+  );
+  register(
+    channels.aiApplyProposal,
+    (_event, request) =>
+      guarded(() => applyPendingTextPlans(request.planIds), 'AI_PROPOSAL_APPLY_FAILED') as Promise<
+        IpcResponse<'ai:apply-proposal'>
+      >,
+  );
+  register(
+    channels.accountStatus,
+    () =>
+      guarded(() => cortexAuth.status(), 'ACCOUNT_STATUS_FAILED') as Promise<
+        IpcResponse<'account:status'>
+      >,
+  );
+  register(
+    channels.accountSignIn,
+    () =>
+      guarded(async () => {
+        await cortexAuth.beginSignIn();
+        return true;
+      }, 'ACCOUNT_SIGN_IN_FAILED') as Promise<IpcResponse<'account:sign-in'>>,
+  );
+  register(
+    channels.accountSignOut,
+    () =>
+      guarded(async () => {
+        await cortexAuth.signOut();
+        return true;
+      }, 'ACCOUNT_SIGN_OUT_FAILED') as Promise<IpcResponse<'account:sign-out'>>,
+  );
+  register(
+    channels.accountCheckout,
+    (_event, request) =>
+      guarded(async () => {
+        await cortexAuth.checkout(request.cadence);
+        return true;
+      }, 'BILLING_CHECKOUT_FAILED') as Promise<IpcResponse<'account:checkout'>>,
+  );
+  register(
+    channels.accountPortal,
+    () =>
+      guarded(async () => {
+        await cortexAuth.portal();
+        return true;
+      }, 'BILLING_PORTAL_FAILED') as Promise<IpcResponse<'account:portal'>>,
+  );
   register(channels.updatesStatus, () => {
     if (!updates) {
       return fail({ code: 'UPDATES_UNAVAILABLE', message: 'Updates are not initialized.' });

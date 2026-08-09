@@ -1,4 +1,14 @@
 import { projectSchema, projectTypeSchema } from '@cortex/project-schema';
+import {
+  aiChangeProposalSchema,
+  aiChatRequestSchema,
+  aiProviderSchema,
+  aiWorkspaceAccessSchema,
+  cortexAiModelSchema,
+  type AiStreamEvent,
+  type AiProvider,
+  type AiWorkspaceAccess,
+} from '@cortex/ai/contracts';
 import { z } from 'zod';
 import { pluginManifestSchema, pluginPermissionSchema } from '@cortex/plugin-sdk';
 import { resourceAnalysisSchema } from '@cortex/script-analysis';
@@ -101,8 +111,10 @@ export const channels = {
   projectsReveal: 'projects:reveal',
   projectsClose: 'projects:close',
   filesList: 'files:list',
+  filesPickHandling: 'files:pick-handling',
   filesRead: 'files:read',
   filesPlanWrite: 'files:plan-write',
+  filesPlanCreateHandling: 'files:plan-create-handling',
   filesApplyWrite: 'files:apply-write',
   manifestLoad: 'manifest:load',
   manifestPlan: 'manifest:plan',
@@ -121,6 +133,20 @@ export const channels = {
   jobsCancel: 'jobs:cancel',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
+  aiModels: 'ai:models',
+  aiCredentialStatus: 'ai:credential-status',
+  aiCredentialSet: 'ai:credential-set',
+  aiCredentialRemove: 'ai:credential-remove',
+  aiProviderTest: 'ai:provider-test',
+  aiChatStart: 'ai:chat-start',
+  aiChatCancel: 'ai:chat-cancel',
+  aiPlanProposal: 'ai:plan-proposal',
+  aiApplyProposal: 'ai:apply-proposal',
+  accountStatus: 'account:status',
+  accountSignIn: 'account:sign-in',
+  accountSignOut: 'account:sign-out',
+  accountCheckout: 'account:checkout',
+  accountPortal: 'account:portal',
   updatesStatus: 'updates:status',
   updatesCheck: 'updates:check',
   updatesDownload: 'updates:download',
@@ -134,6 +160,44 @@ export const channels = {
 
 /** Main → renderer push when update status changes. */
 export const updatesChangedEvent = 'updates:changed' as const;
+export const aiStreamEvent = 'ai:stream' as const;
+export const accountChangedEvent = 'account:changed' as const;
+
+export const accountStatusSchema = z
+  .object({
+    configured: z.boolean(),
+    cloudConfigured: z.boolean(),
+    status: z.enum(['unconfigured', 'signed-out', 'signed-in', 'expired']),
+    identity: z
+      .object({
+        id: z.string(),
+        email: z.email(),
+        displayName: z.string(),
+        avatarUrl: z.url().nullable(),
+      })
+      .strict()
+      .nullable(),
+    plan: z.enum(['free', 'pro']).nullable(),
+    usage: z
+      .object({
+        used: z.number().int().nonnegative(),
+        limit: z.number().int().positive(),
+        remaining: z.number().int().nonnegative(),
+        periodEnd: z.iso.datetime(),
+      })
+      .strict()
+      .nullable(),
+    billing: z
+      .object({
+        status: z.enum(['none', 'active', 'trialing', 'past_due', 'canceled', 'unpaid']),
+        renewalDate: z.iso.datetime().nullable(),
+      })
+      .strict()
+      .nullable(),
+    message: z.string().nullable(),
+  })
+  .strict();
+export type AccountStatus = z.infer<typeof accountStatusSchema>;
 
 export const updateStatusSchema = z.object({
   phase: z.enum([
@@ -219,6 +283,11 @@ export const DEFAULT_PREFERENCES = {
   autoDownloadUpdates: true,
   releaseBranch: 'stable',
   installedModules: defaultInstalledModuleIds(),
+  aiEnabled: false,
+  aiProvider: 'cortex-hosted',
+  aiModel: 'deepseek/deepseek-v4-flash',
+  aiWorkspaceAccess: 'ask-before-changes',
+  aiPanelWidth: 420,
 } as const;
 
 export interface Preferences {
@@ -255,6 +324,11 @@ export interface Preferences {
   autoDownloadUpdates: boolean;
   releaseBranch: 'stable' | 'developer';
   installedModules: ReturnType<typeof defaultInstalledModuleIds>;
+  aiEnabled: boolean;
+  aiProvider: AiProvider;
+  aiModel: string;
+  aiWorkspaceAccess: AiWorkspaceAccess;
+  aiPanelWidth: number;
 }
 
 /** Strict field contracts for well-formed preference values. */
@@ -293,6 +367,11 @@ export const preferenceSchema = z.object({
   autoDownloadUpdates: z.boolean(),
   releaseBranch: z.enum(['stable', 'developer']),
   installedModules: z.array(moduleIdSchema),
+  aiEnabled: z.boolean(),
+  aiProvider: aiProviderSchema,
+  aiModel: z.string().min(1).max(200),
+  aiWorkspaceAccess: aiWorkspaceAccessSchema,
+  aiPanelWidth: z.number().int().min(320).max(720),
 });
 
 /**
@@ -336,6 +415,13 @@ export function normalizePreferences(raw: unknown): Preferences {
     source.autoDownloadUpdates,
   );
   const releaseBranch = preferenceSchema.shape.releaseBranch.safeParse(source.releaseBranch);
+  const aiEnabled = preferenceSchema.shape.aiEnabled.safeParse(source.aiEnabled);
+  const aiProvider = preferenceSchema.shape.aiProvider.safeParse(source.aiProvider);
+  const aiModel = preferenceSchema.shape.aiModel.safeParse(source.aiModel);
+  const aiWorkspaceAccess = preferenceSchema.shape.aiWorkspaceAccess.safeParse(
+    source.aiWorkspaceAccess,
+  );
+  const aiPanelWidth = preferenceSchema.shape.aiPanelWidth.safeParse(source.aiPanelWidth);
   return {
     interfaceScale: scale.success ? scale.data : DEFAULT_PREFERENCES.interfaceScale,
     uiFontSize: uiFontSize.success ? uiFontSize.data : DEFAULT_PREFERENCES.uiFontSize,
@@ -381,6 +467,13 @@ export function normalizePreferences(raw: unknown): Preferences {
       : DEFAULT_PREFERENCES.autoDownloadUpdates,
     releaseBranch: releaseBranch.success ? releaseBranch.data : DEFAULT_PREFERENCES.releaseBranch,
     installedModules: normalizeInstalledModules(source.installedModules),
+    aiEnabled: aiEnabled.success ? aiEnabled.data : DEFAULT_PREFERENCES.aiEnabled,
+    aiProvider: aiProvider.success ? aiProvider.data : DEFAULT_PREFERENCES.aiProvider,
+    aiModel: aiModel.success ? aiModel.data : DEFAULT_PREFERENCES.aiModel,
+    aiWorkspaceAccess: aiWorkspaceAccess.success
+      ? aiWorkspaceAccess.data
+      : DEFAULT_PREFERENCES.aiWorkspaceAccess,
+    aiPanelWidth: aiPanelWidth.success ? aiPanelWidth.data : DEFAULT_PREFERENCES.aiPanelWidth,
   };
 }
 
@@ -522,6 +615,14 @@ export const ipcDefinitions = {
   },
   [channels.projectsClose]: { request: empty, response: result(z.null()) },
   [channels.filesList]: { request: empty, response: result(z.array(resourceFileSchema)) },
+  [channels.filesPickHandling]: {
+    request: empty,
+    response: result(
+      z
+        .object({ content: z.string(), relativePath: z.string(), readOnly: z.literal(false) })
+        .nullable(),
+    ),
+  },
   [channels.filesRead]: {
     request: z.object({ relativePath: z.string().min(1).max(4096) }).strict(),
     response: result(
@@ -529,6 +630,12 @@ export const ipcDefinitions = {
     ),
   },
   [channels.filesPlanWrite]: {
+    request: z
+      .object({ relativePath: z.string().min(1).max(4096), source: z.string().max(2_000_000) })
+      .strict(),
+    response: result(changePlanSchema),
+  },
+  [channels.filesPlanCreateHandling]: {
     request: z
       .object({ relativePath: z.string().min(1).max(4096), source: z.string().max(2_000_000) })
       .strict(),
@@ -614,6 +721,61 @@ export const ipcDefinitions = {
     request: preferenceRequestSchema,
     response: result(preferenceValueSchema),
   },
+  [channels.aiModels]: { request: empty, response: result(z.array(cortexAiModelSchema).max(20)) },
+  [channels.aiCredentialStatus]: {
+    request: empty,
+    response: result(
+      z.object({ configured: z.boolean(), encryptionAvailable: z.boolean() }).strict(),
+    ),
+  },
+  [channels.aiCredentialSet]: {
+    request: z.object({ apiKey: z.string().trim().min(16).max(512) }).strict(),
+    response: result(z.object({ configured: z.literal(true) }).strict()),
+  },
+  [channels.aiCredentialRemove]: { request: empty, response: result(z.boolean()) },
+  [channels.aiProviderTest]: {
+    request: empty,
+    response: result(z.object({ provider: aiProviderSchema, model: z.string() }).strict()),
+  },
+  [channels.aiChatStart]: {
+    request: aiChatRequestSchema,
+    response: result(z.object({ runId: z.string().min(1).max(160) }).strict()),
+  },
+  [channels.aiChatCancel]: {
+    request: z.object({ runId: z.string().min(1).max(160) }).strict(),
+    response: result(z.boolean()),
+  },
+  [channels.aiPlanProposal]: {
+    request: z.object({ proposal: aiChangeProposalSchema }).strict(),
+    response: result(
+      z
+        .array(z.object({ relativePath: z.string(), planId: z.uuid() }).strict())
+        .min(1)
+        .max(20),
+    ),
+  },
+  [channels.aiApplyProposal]: {
+    request: z.object({ planIds: z.array(z.uuid()).min(1).max(20) }).strict(),
+    response: result(
+      z.array(
+        z
+          .object({
+            target: z.string(),
+            backup: z.string().nullable(),
+            bytes: z.number(),
+          })
+          .strict(),
+      ),
+    ),
+  },
+  [channels.accountStatus]: { request: empty, response: result(accountStatusSchema) },
+  [channels.accountSignIn]: { request: empty, response: result(z.boolean()) },
+  [channels.accountSignOut]: { request: empty, response: result(z.boolean()) },
+  [channels.accountCheckout]: {
+    request: z.object({ cadence: z.enum(['monthly', 'annual']) }).strict(),
+    response: result(z.boolean()),
+  },
+  [channels.accountPortal]: { request: empty, response: result(z.boolean()) },
   [channels.updatesStatus]: { request: empty, response: result(updateStatusSchema) },
   [channels.updatesCheck]: { request: empty, response: result(updateStatusSchema) },
   [channels.updatesDownload]: { request: empty, response: result(updateStatusSchema) },
@@ -683,8 +845,12 @@ export interface CortexApi {
   };
   files: {
     list(): Promise<IpcResponse<'files:list'>>;
+    pickHandling(): Promise<IpcResponse<'files:pick-handling'>>;
     read(input: IpcRequest<'files:read'>): Promise<IpcResponse<'files:read'>>;
     planWrite(input: IpcRequest<'files:plan-write'>): Promise<IpcResponse<'files:plan-write'>>;
+    planCreateHandling(
+      input: IpcRequest<'files:plan-create-handling'>,
+    ): Promise<IpcResponse<'files:plan-create-handling'>>;
     applyWrite(input: IpcRequest<'files:apply-write'>): Promise<IpcResponse<'files:apply-write'>>;
   };
   resources: {
@@ -715,6 +881,30 @@ export interface CortexApi {
   settings: {
     get(): Promise<IpcResponse<'settings:get'>>;
     set(input: IpcRequest<'settings:set'>): Promise<IpcResponse<'settings:set'>>;
+  };
+  ai: {
+    models(): Promise<IpcResponse<'ai:models'>>;
+    credentialStatus(): Promise<IpcResponse<'ai:credential-status'>>;
+    setCredential(
+      input: IpcRequest<'ai:credential-set'>,
+    ): Promise<IpcResponse<'ai:credential-set'>>;
+    removeCredential(): Promise<IpcResponse<'ai:credential-remove'>>;
+    testProvider(): Promise<IpcResponse<'ai:provider-test'>>;
+    startChat(input: IpcRequest<'ai:chat-start'>): Promise<IpcResponse<'ai:chat-start'>>;
+    cancelChat(input: IpcRequest<'ai:chat-cancel'>): Promise<IpcResponse<'ai:chat-cancel'>>;
+    planProposal(input: IpcRequest<'ai:plan-proposal'>): Promise<IpcResponse<'ai:plan-proposal'>>;
+    applyProposal(
+      input: IpcRequest<'ai:apply-proposal'>,
+    ): Promise<IpcResponse<'ai:apply-proposal'>>;
+    onStream(listener: (event: AiStreamEvent) => void): () => void;
+  };
+  account: {
+    status(): Promise<IpcResponse<'account:status'>>;
+    signIn(): Promise<IpcResponse<'account:sign-in'>>;
+    signOut(): Promise<IpcResponse<'account:sign-out'>>;
+    checkout(input: IpcRequest<'account:checkout'>): Promise<IpcResponse<'account:checkout'>>;
+    portal(): Promise<IpcResponse<'account:portal'>>;
+    onChanged(listener: (status: AccountStatus) => void): () => void;
   };
   updates: {
     status(): Promise<IpcResponse<'updates:status'>>;

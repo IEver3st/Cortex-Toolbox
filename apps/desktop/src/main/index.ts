@@ -6,11 +6,13 @@ import { loadEnv } from './config/env';
 import { DiagnosticsService } from './diagnostics-service';
 import { registerIpc, readPreferences } from './ipc';
 import { resolveAppIconPath } from './window-branding';
+import { CORTEX_AUTH_PROTOCOL, CortexAuthService } from './auth-service';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
 const env = loadEnv();
+const cortexAuth = new CortexAuthService(env);
 const brand = brandingForChannel(env.CORTEX_RELEASE_CHANNEL);
 const diagnostics = new DiagnosticsService();
 const logger = pino(
@@ -32,6 +34,52 @@ const isDevelopment = Boolean(MAIN_WINDOW_VITE_DEV_SERVER_URL);
 const csp = isDevelopment
   ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws:; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
   : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
+let primaryWindow: BrowserWindow | null = null;
+let pendingAuthUrl: string | null = findAuthUrl(process.argv);
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else if (process.defaultApp && process.argv[1]) {
+  app.setAsDefaultProtocolClient(CORTEX_AUTH_PROTOCOL, process.execPath, [
+    path.resolve(process.argv[1]),
+  ]);
+} else {
+  app.setAsDefaultProtocolClient(CORTEX_AUTH_PROTOCOL);
+}
+
+function findAuthUrl(argv: string[]): string | null {
+  return argv.find((argument) => argument.startsWith(`${CORTEX_AUTH_PROTOCOL}://`)) ?? null;
+}
+
+async function handleAuthUrl(url: string): Promise<void> {
+  try {
+    await cortexAuth.handleCallback(url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Cortex sign-in failed.';
+    diagnostics.record('error', message);
+    await cortexAuth.reportFailure(message);
+  } finally {
+    if (primaryWindow?.isMinimized()) primaryWindow.restore();
+    primaryWindow?.show();
+    primaryWindow?.focus();
+  }
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (!url.startsWith(`${CORTEX_AUTH_PROTOCOL}://`)) return;
+  if (app.isReady()) void handleAuthUrl(url);
+  else pendingAuthUrl = url;
+});
+
+app.on('second-instance', (_event, argv) => {
+  const url = findAuthUrl(argv);
+  if (url) void handleAuthUrl(url);
+  if (primaryWindow?.isMinimized()) primaryWindow.restore();
+  primaryWindow?.show();
+  primaryWindow?.focus();
+});
 
 function createWindow(): BrowserWindow {
   const preferences = readPreferences();
@@ -68,41 +116,51 @@ function createWindow(): BrowserWindow {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   else
     void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+  primaryWindow = window;
+  window.on('closed', () => {
+    if (primaryWindow === window) primaryWindow = null;
+  });
   return window;
 }
 
-app
-  .whenReady()
-  .then(() => {
-    if (process.platform === 'win32') {
-      app.setAppUserModelId(brand.appBundleId);
-    }
-    session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
-      callback(false),
-    );
-    session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
-      callback({
-        responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] },
-      }),
-    );
-    registerIpc(env, diagnostics);
-    createWindow();
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (hasSingleInstanceLock)
+  app
+    .whenReady()
+    .then(() => {
+      if (process.platform === 'win32') {
+        app.setAppUserModelId(brand.appBundleId);
+      }
+      session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
+        callback(false),
+      );
+      session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
+        callback({
+          responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] },
+        }),
+      );
+      registerIpc(env, diagnostics, cortexAuth);
+      createWindow();
+      if (pendingAuthUrl) {
+        const url = pendingAuthUrl;
+        pendingAuthUrl = null;
+        void handleAuthUrl(url);
+      }
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      });
+      logger.info(
+        { releaseChannel: env.CORTEX_RELEASE_CHANNEL, productName: brand.productName },
+        'Cortex started',
+      );
+    })
+    .catch((error: unknown) => {
+      diagnostics.record(
+        'error',
+        error instanceof Error ? (error.stack ?? error.message) : String(error),
+      );
+      logger.fatal({ error }, 'Cortex failed to start');
+      app.quit();
     });
-    logger.info(
-      { releaseChannel: env.CORTEX_RELEASE_CHANNEL, productName: brand.productName },
-      'Cortex started',
-    );
-  })
-  .catch((error: unknown) => {
-    diagnostics.record(
-      'error',
-      error instanceof Error ? (error.stack ?? error.message) : String(error),
-    );
-    logger.fatal({ error }, 'Cortex failed to start');
-    app.quit();
-  });
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });

@@ -1,44 +1,75 @@
+import {
+  type HandlingPresetId,
+  type HandlingSetup,
+  type HandlingValues,
+} from '@cortex/vehicle-meta';
 import { Search } from 'lucide-react';
-import { type HandlingPresetId, type HandlingValues } from '@cortex/vehicle-meta';
+import { Select } from '../../../components/Select';
+import { Toggle } from '../../../components/UiPrimitives';
 import {
   fieldsForWorkbenchCategory,
   HANDLING_CATEGORY_LABELS,
   presetLabel as formatPresetLabel,
 } from '../chassis-utils';
-import { Toggle } from '../../../components/UiPrimitives';
 import { BehaviorInspector } from '../components/BehaviorInspector';
 import { ParameterField } from '../components/ParameterField';
 import { PresetControls } from '../components/PresetControls';
+import { VectorInputs } from '../components/VectorInputs';
 import type { FieldChange, HandlingWorkbenchCategory, PresetId } from '../types';
 
 const CATEGORY_ORDER: HandlingWorkbenchCategory[] = [
+  'physical',
   'powertrain',
-  'grip',
-  'steering',
-  'brakes',
+  'braking',
+  'traction',
   'suspension',
-  'aero',
   'damage',
   'advanced',
 ];
 
+const SUB_HANDLING_TYPES: Record<HandlingSetup['subHandling'], string> = {
+  none: 'NULL',
+  car: 'CCarHandlingData',
+  bike: 'CBikeHandlingData',
+  boat: 'CBoatHandlingData',
+  trailer: 'CTrailerHandlingData',
+  other: '',
+};
+
+function subHandlingLabel(value: string | undefined): string {
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed.length === 0) return 'Other imported type';
+  return trimmed;
+}
+
+function countCategoryChanges(
+  category: HandlingWorkbenchCategory,
+  handling: HandlingValues,
+  saved: HandlingValues,
+): number {
+  return fieldsForWorkbenchCategory(category, true).filter(
+    (field) => handling[field.key] !== saved[field.key],
+  ).length;
+}
+
 export function HandlingSection({
   handling,
   savedHandling,
+  handlingSetup,
+  savedHandlingSetup,
   presetId,
   presetBase,
   category,
   search,
   changedOnly,
-  showAdvanced,
   highlightedField,
+  aiModifiedFields,
   categoryChanges,
   allChanges,
   inspectorOpen,
   onCategoryChange,
   onSearchChange,
   onChangedOnlyChange,
-  onShowAdvancedChange,
   onFieldChange,
   onFieldReset,
   onCategoryReset,
@@ -46,9 +77,13 @@ export function HandlingSection({
   onSelectChange,
   onResetField,
   onToggleInspector,
+  onSetupChange,
+  onSetupVectorChange,
 }: {
   handling: HandlingValues;
   savedHandling: HandlingValues;
+  handlingSetup: HandlingSetup;
+  savedHandlingSetup: HandlingSetup;
   presetId: PresetId;
   presetBase: HandlingPresetId;
   category: HandlingWorkbenchCategory;
@@ -56,6 +91,7 @@ export function HandlingSection({
   changedOnly: boolean;
   showAdvanced: boolean;
   highlightedField: string | null;
+  aiModifiedFields: ReadonlySet<string>;
   categoryChanges: FieldChange[];
   allChanges: FieldChange[];
   inspectorOpen: boolean;
@@ -70,31 +106,38 @@ export function HandlingSection({
   onSelectChange: (fieldKey: string) => void;
   onResetField: (fieldKey: string) => void;
   onToggleInspector: () => void;
+  onSetupChange: (patch: Partial<HandlingSetup>) => void;
+  onSetupVectorChange: (
+    vector: 'centreOfMass' | 'inertiaMultiplier' | 'seatOffset',
+    axis: 'x' | 'y' | 'z',
+    value: number,
+  ) => void;
 }): React.JSX.Element {
-  const fields = fieldsForWorkbenchCategory(category, showAdvanced).filter((field) => {
-    const query = search.trim().toLowerCase();
-    if (!query) return true;
-    return (
+  const query = search.trim().toLowerCase();
+  const fields = fieldsForWorkbenchCategory(category, true).filter(
+    (field) =>
+      !query ||
       field.label.toLowerCase().includes(query) ||
       field.key.toLowerCase().includes(query) ||
-      field.description.toLowerCase().includes(query)
-    );
-  });
-
+      field.description.toLowerCase().includes(query),
+  );
   const visibleFields = changedOnly
     ? fields.filter((field) => handling[field.key] !== savedHandling[field.key])
     : fields;
-
-  const warningCount = allChanges.filter((change) => change.section === 'handling').length;
+  const warningCount = allChanges.filter(
+    (change) => change.section === 'handling' || change.section === 'vehicle-setup',
+  ).length;
 
   return (
-    <div className={`chassis-handling-workbench${inspectorOpen ? ' inspector-open' : ''}`}>
-      <aside className="chassis-handling-rail" aria-label="Handling categories">
+    <div
+      className={`chassis-handling-workbench chassis-fast-editor${inspectorOpen ? ' inspector-open' : ''}`}
+    >
+      <div className="chassis-handling-toolbar">
         <label className="chassis-rail-search">
           <Search aria-hidden="true" />
           <input
             type="search"
-            placeholder="Search parameters"
+            placeholder="Search handling fields"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
           />
@@ -105,60 +148,113 @@ export function HandlingSection({
             id="chassis-changed-only"
             checked={changedOnly}
             onChange={onChangedOnlyChange}
-            ariaLabel="Changed only"
+            ariaLabel="Show changed fields only"
           />
         </div>
-        <div className="chassis-rail-filter">
-          <span>Advanced values</span>
-          <Toggle
-            id="chassis-advanced-values"
-            checked={showAdvanced}
-            onChange={onShowAdvancedChange}
-            ariaLabel="Advanced values"
-          />
-        </div>
-        <nav aria-label="Handling categories">
-          {CATEGORY_ORDER.filter((item) => item !== 'advanced' || showAdvanced).map((item) => {
-            const count = countCategoryChanges(item, handling, savedHandling, showAdvanced);
-            return (
-              <button
-                key={item}
-                type="button"
-                className={category === item ? 'is-active' : ''}
-                aria-current={category === item ? 'true' : undefined}
-                onClick={() => onCategoryChange(item)}
-              >
-                {HANDLING_CATEGORY_LABELS[item]}
-                {count > 0 ? <span className="chassis-rail-count">{count}</span> : null}
-              </button>
-            );
-          })}
-        </nav>
         {warningCount > 0 ? (
-          <p className="chassis-rail-warnings" role="status">
-            {warningCount} unsaved handling change{warningCount === 1 ? '' : 's'}
-          </p>
+          <span className="chassis-inline-change-count" role="status">
+            {warningCount} changed
+          </span>
         ) : null}
-      </aside>
+      </div>
 
-      <section className="chassis-handling-editor" aria-label="Parameter editor">
-        <PresetControls
-          activePreset={presetId}
-          presetBase={presetBase}
-          onSelectPreset={onSelectPreset}
-        />
+      <nav className="chassis-category-tabs" aria-label="Handling categories">
+        {CATEGORY_ORDER.map((item) => {
+          const count = countCategoryChanges(item, handling, savedHandling);
+          return (
+            <button
+              key={item}
+              type="button"
+              className={category === item ? 'is-active' : ''}
+              aria-current={category === item ? 'page' : undefined}
+              onClick={() => onCategoryChange(item)}
+            >
+              {HANDLING_CATEGORY_LABELS[item]}
+              {count > 0 ? <span>{count}</span> : null}
+            </button>
+          );
+        })}
+      </nav>
+
+      <section className="chassis-handling-editor" aria-label="Handling parameter editor">
         <header className="chassis-editor-heading">
           <div>
             <h2>{HANDLING_CATEGORY_LABELS[category]}</h2>
             <p>
-              {visibleFields.length} parameter{visibleFields.length === 1 ? '' : 's'}
-              {changedOnly ? ' with unsaved changes' : ''}
+              {visibleFields.length} numeric parameter{visibleFields.length === 1 ? '' : 's'}
+              {changedOnly ? ' changed from the saved file' : ''}
             </p>
           </div>
-          <button type="button" className="chassis-text-action" onClick={onCategoryReset}>
-            Reset category
-          </button>
+          <div className="chassis-editor-heading-actions">
+            <button type="button" className="chassis-text-action" onClick={onCategoryReset}>
+              Reset section
+            </button>
+            <button
+              type="button"
+              className="chassis-text-action"
+              aria-expanded={inspectorOpen}
+              onClick={onToggleInspector}
+            >
+              {inspectorOpen ? 'Hide analysis' : 'Show analysis'}
+            </button>
+          </div>
         </header>
+
+        {category === 'physical' ? (
+          <div className="chassis-vector-stack">
+            <VectorInputs
+              label="Centre of mass"
+              value={handlingSetup.centreOfMass}
+              original={savedHandlingSetup.centreOfMass}
+              min={-2}
+              max={2}
+              directions={{
+                x: ['Left', 'Right'],
+                y: ['Rear', 'Front'],
+                z: ['Lower', 'Higher'],
+              }}
+              aiModifiedAxes={
+                new Set(
+                  (['x', 'y', 'z'] as const).filter((axis) =>
+                    aiModifiedFields.has(`centreOfMass.${axis}`),
+                  ),
+                )
+              }
+              onChange={(axis, value) => onSetupVectorChange('centreOfMass', axis, value)}
+              onReset={(axis) =>
+                onSetupVectorChange('centreOfMass', axis, savedHandlingSetup.centreOfMass[axis])
+              }
+            />
+            <VectorInputs
+              label="Inertia multiplier"
+              value={handlingSetup.inertiaMultiplier}
+              original={savedHandlingSetup.inertiaMultiplier}
+              min={0.1}
+              max={5}
+              directions={{
+                x: ['Less pitch', 'More pitch'],
+                y: ['Less roll', 'More roll'],
+                z: ['Less yaw', 'More yaw'],
+              }}
+              aiModifiedAxes={
+                new Set(
+                  (['x', 'y', 'z'] as const).filter((axis) =>
+                    aiModifiedFields.has(`inertiaMultiplier.${axis}`),
+                  ),
+                )
+              }
+              onChange={(axis, value) => onSetupVectorChange('inertiaMultiplier', axis, value)}
+              onReset={(axis) =>
+                onSetupVectorChange(
+                  'inertiaMultiplier',
+                  axis,
+                  savedHandlingSetup.inertiaMultiplier[axis],
+                )
+              }
+            />
+          </div>
+        ) : null}
+
         <div className="chassis-param-list">
           {visibleFields.length === 0 ? (
             <p className="chassis-inspector-empty">No parameters match the current filters.</p>
@@ -170,20 +266,124 @@ export function HandlingSection({
                 value={handling[field.key]}
                 original={savedHandling[field.key]}
                 highlighted={highlightedField === field.key}
+                aiModified={aiModifiedFields.has(field.key)}
                 onChange={(value) => onFieldChange(field.key, value)}
                 onReset={() => onFieldReset(field.key)}
               />
             ))
           )}
         </div>
-        <button
-          type="button"
-          className="chassis-inspector-toggle"
-          aria-expanded={inspectorOpen}
-          onClick={onToggleInspector}
-        >
-          {inspectorOpen ? 'Hide behavior profile' : 'Show behavior profile'}
-        </button>
+
+        {category === 'advanced' ? (
+          <div className="chassis-advanced-settings">
+            <VectorInputs
+              label="Seat offset"
+              value={handlingSetup.seatOffset}
+              original={savedHandlingSetup.seatOffset}
+              min={-2}
+              max={2}
+              directions={{
+                x: ['Left', 'Right'],
+                y: ['Rear', 'Front'],
+                z: ['Lower', 'Higher'],
+              }}
+              aiModifiedAxes={
+                new Set(
+                  (['x', 'y', 'z'] as const).filter((axis) =>
+                    aiModifiedFields.has(`seatOffset.${axis}`),
+                  ),
+                )
+              }
+              onChange={(axis, value) => onSetupVectorChange('seatOffset', axis, value)}
+              onReset={(axis) =>
+                onSetupVectorChange('seatOffset', axis, savedHandlingSetup.seatOffset[axis])
+              }
+            />
+            <div className="chassis-advanced-grid">
+              <label>
+                <span>Monetary value</span>
+                <input
+                  type="number"
+                  step={1}
+                  value={handlingSetup.monetaryValue}
+                  onChange={(event) => {
+                    const value = event.currentTarget.valueAsNumber;
+                    if (Number.isFinite(value)) onSetupChange({ monetaryValue: value });
+                  }}
+                />
+              </label>
+              <label>
+                <span>AI handling</span>
+                <input
+                  value={handlingSetup.aiHandling}
+                  onChange={(event) => onSetupChange({ aiHandling: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Model flags</span>
+                <input
+                  value={handlingSetup.modelFlags}
+                  onChange={(event) => onSetupChange({ modelFlags: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Handling flags</span>
+                <input
+                  value={handlingSetup.handlingFlags}
+                  onChange={(event) => onSetupChange({ handlingFlags: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Damage flags</span>
+                <input
+                  value={handlingSetup.damageFlags}
+                  onChange={(event) => onSetupChange({ damageFlags: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Subhandling</span>
+                <Select
+                  id="chassis-subhandling"
+                  value={handlingSetup.subHandling}
+                  options={[
+                    { value: 'none', label: 'None' },
+                    { value: 'car', label: 'Car' },
+                    { value: 'bike', label: 'Bike' },
+                    { value: 'boat', label: 'Boat' },
+                    { value: 'trailer', label: 'Trailer' },
+                    ...(handlingSetup.subHandling === 'other'
+                      ? [
+                          {
+                            value: 'other' as const,
+                            label: subHandlingLabel(handlingSetup.subHandlingType),
+                          },
+                        ]
+                      : []),
+                  ]}
+                  onChange={(subHandling) => {
+                    const subHandlingType =
+                      subHandling === 'other'
+                        ? handlingSetup.subHandlingType
+                        : SUB_HANDLING_TYPES[subHandling];
+                    onSetupChange({
+                      subHandling,
+                      ...(subHandlingType ? { subHandlingType } : {}),
+                    });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        ) : null}
+
+        <details className="chassis-preset-tools">
+          <summary>Apply a handling preset</summary>
+          <PresetControls
+            activePreset={presetId}
+            presetBase={presetBase}
+            onSelectPreset={onSelectPreset}
+          />
+        </details>
       </section>
 
       <BehaviorInspector
@@ -197,15 +397,4 @@ export function HandlingSection({
       />
     </div>
   );
-}
-
-function countCategoryChanges(
-  category: HandlingWorkbenchCategory,
-  handling: HandlingValues,
-  saved: HandlingValues,
-  showAdvanced: boolean,
-): number {
-  return fieldsForWorkbenchCategory(category, showAdvanced).filter(
-    (field) => handling[field.key] !== saved[field.key],
-  ).length;
 }

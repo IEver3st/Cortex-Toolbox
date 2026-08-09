@@ -25,6 +25,8 @@ import { useWorkspaceStore } from './store/workspace';
 import { applyPreferencesToDocument } from './lib/themes';
 import { ModuleView } from './modules/module-view';
 import { preferencesQueryOptions } from './hooks/usePreferences';
+import { usePreferences } from './hooks/usePreferences';
+import { useAiStore } from './ai/ai-store';
 
 function recordWorkspaceRenderError(error: Error, info: ErrorInfo): void {
   void window.cortex.reports.recordClientError({
@@ -39,6 +41,7 @@ const FileView = lazy(() =>
 const SettingsView = lazy(() =>
   import('./components/SettingsView').then((module) => ({ default: module.SettingsView })),
 );
+const AiWorkspacePanel = lazy(() => import('./ai/AiWorkspacePanel'));
 
 function WorkspaceLoading(): React.JSX.Element {
   return (
@@ -139,6 +142,9 @@ export function App(): React.JSX.Element {
     ? (tabs.find((item) => item.id === lastWorkbenchTab) ?? tabs[0])
     : tab;
   const queryClient = useQueryClient();
+  const preferences = usePreferences();
+  const aiPanelOpen = useAiStore((state) => state.panelOpen);
+  const setAiPanelOpen = useAiStore((state) => state.setPanelOpen);
   const workspaceName =
     workspace?.project?.name ?? (workspace ? workspace.root.split(/[\\/]/).at(-1) : null);
   const bridgeReady = Boolean(window.cortex.projects);
@@ -183,6 +189,9 @@ export function App(): React.JSX.Element {
     };
   }, [bridgeReady, hydrateModules, queryClient]);
   useEffect(() => {
+    if (preferences.data?.aiEnabled !== true) setAiPanelOpen(false);
+  }, [preferences.data?.aiEnabled, setAiPanelOpen]);
+  useEffect(() => {
     if (!bridgeReady) return;
     const listener = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -192,6 +201,16 @@ export function App(): React.JSX.Element {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'p') {
         event.preventDefault();
         setPalette(true);
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'l' &&
+        preferences.data?.aiEnabled &&
+        workspace
+      ) {
+        event.preventDefault();
+        setAiPanelOpen(!useAiStore.getState().panelOpen);
       }
       const shortcut =
         event.ctrlKey || event.metaKey
@@ -208,7 +227,15 @@ export function App(): React.JSX.Element {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [bridgeReady, isModuleInstalled, openTab, setPalette, workspace?.manifestName]);
+  }, [
+    bridgeReady,
+    isModuleInstalled,
+    openTab,
+    preferences.data?.aiEnabled,
+    setAiPanelOpen,
+    setPalette,
+    workspace,
+  ]);
 
   const goOverview = () => {
     setViewRecoveryKey((value) => value + 1);
@@ -227,6 +254,9 @@ export function App(): React.JSX.Element {
     tabModuleId !== null && !isModuleInstalled(tabModuleId) ? MODULE_BY_ID[tabModuleId] : null;
   const moduleBlocked = blockedModule !== null;
   const overviewActive = !settingsActive && workbenchTab?.kind === 'welcome' && !workspace;
+  const showAiPanel = Boolean(
+    !settingsActive && workspace && preferences.data?.aiEnabled && aiPanelOpen,
+  );
 
   if (!bridgeReady) {
     return (
@@ -249,7 +279,7 @@ export function App(): React.JSX.Element {
       </a>
       <TitleBar />
       <div
-        className={`${sidebarCollapsed ? 'workbench is-sidebar-collapsed' : 'workbench'}${settingsActive ? ' is-settings' : ''}`}
+        className={`${sidebarCollapsed ? 'workbench is-sidebar-collapsed' : 'workbench'}${settingsActive ? ' is-settings' : ''}${showAiPanel ? ' has-ai-panel' : ''}`}
       >
         {!settingsActive ? <ActivityRail /> : null}
         <main
@@ -331,6 +361,11 @@ export function App(): React.JSX.Element {
             </Activity>
           </div>
         </main>
+        {showAiPanel ? (
+          <Suspense fallback={null}>
+            <AiWorkspacePanel />
+          </Suspense>
+        ) : null}
       </div>
       <div className="compact-dock" aria-label="Compact window controls">
         <Tooltip content="Command palette" shortcut="Ctrl+K" side="top">
