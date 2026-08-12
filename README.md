@@ -32,7 +32,7 @@ Then use:
 
 ## Overview
 
-Cortex ToolBox is a free, open-source Windows desktop application for FiveM resource developers and GTA V asset authors.
+Cortex ToolBox is a free-to-use, source-available Windows desktop application for FiveM resource developers and GTA V asset authors.
 
 It brings the repetitive and failure-prone parts of resource development into one workspace:
 
@@ -284,6 +284,17 @@ Cortex is designed around reviewed, local operations.
 
 See [SECURITY.md](./SECURITY.md) for supported versions and private vulnerability reporting.
 
+## Public-source configuration
+
+Local desktop tools work without production credentials. Copy the tracked example files only when you need local overrides:
+
+- `.env.example` or `apps/desktop/.env.example` for main-process desktop configuration;
+- `apps/cortex-cloud/.dev.vars.example` for local Worker sandbox/test configuration.
+
+Never commit the copied files. Cloudflare provider/Stripe/webhook credentials are Worker secrets; billing, WorkOS, and Cloudflare resource IDs are deployment configuration. Production Electron builds receive only the intentionally public WorkOS client coordinate and Worker URL through GitHub variables. See [Cortex Cloud deployment](./apps/cortex-cloud/DEPLOYMENT.md) and the [public release checklist](./docs/security/PUBLIC_RELEASE_CHECKLIST.md).
+
+Run `pnpm security:scan` before opening a pull request. The pre-commit hook scans staged files, and CI runs both the repository scanner and Gitleaks.
+
 ## Personalisation
 
 Cortex provides configurable settings for:
@@ -344,6 +355,7 @@ Cortex-Toolbox/
 ├── scripts/
 ├── CHANGELOG.md
 ├── SECURITY.md
+├── TRADEMARKS.md
 └── LICENSE
 ```
 
@@ -476,9 +488,13 @@ Do not publish secrets, paid assets or proprietary resources in an issue.
 
 ## Licence
 
-Cortex ToolBox is free software released under the [GNU General Public License v3.0 or later](./LICENSE).
+Cortex ToolBox is source-available under the [PolyForm Noncommercial License 1.0.0](./LICENSE).
 
-You may use, study, modify and redistribute the software under the terms of that licence. Distributed modifications must preserve the applicable GPL obligations.
+You may use, study, modify and share the software for noncommercial purposes, subject to the terms and required notices in that licence. Commercial use—including selling, paid hosting, bundling it into a paid product or service, or using it to provide commercial benefit—requires separate written permission from the copyright holder.
+
+The Cortex name, Cortex ToolBox name, logos, icons and official branding are not licensed as part of the source code. See the [trademark and branding policy](./TRADEMARKS.md) before publishing a fork or redistribution.
+
+This licensing change does not revoke rights already granted for earlier releases; those releases remain available under the licences that accompanied them.
 
 ## Disclaimer
 

@@ -8,6 +8,7 @@ import {
   type AccountRow,
 } from './db';
 import type { Env } from './env';
+import { requireBillingConfig, requirePriceConfig } from './runtime-config';
 
 class StripeApiError extends HttpError {
   constructor(readonly stripeStatus: number) {
@@ -25,11 +26,12 @@ export interface PricePolicy extends CheckoutSelection {
 }
 
 export function pricePolicies(env: Env): PricePolicy[] {
+  const prices = requirePriceConfig(env);
   const policies: PricePolicy[] = [
-    { plan: 'creator', interval: 'month', priceId: env.STRIPE_CREATOR_MONTHLY_PRICE_ID },
-    { plan: 'creator', interval: 'year', priceId: env.STRIPE_CREATOR_ANNUAL_PRICE_ID },
-    { plan: 'pro', interval: 'month', priceId: env.STRIPE_PRO_MONTHLY_PRICE_ID },
-    { plan: 'pro', interval: 'year', priceId: env.STRIPE_PRO_ANNUAL_PRICE_ID },
+    { plan: 'creator', interval: 'month', priceId: prices.creatorMonthly },
+    { plan: 'creator', interval: 'year', priceId: prices.creatorAnnual },
+    { plan: 'pro', interval: 'month', priceId: prices.proMonthly },
+    { plan: 'pro', interval: 'year', priceId: prices.proAnnual },
   ];
   if (policies.some((policy) => !policy.priceId.trim())) {
     throw new HttpError(503, 'Billing is not configured.');
@@ -58,7 +60,7 @@ export async function createCheckout(
   userId: string,
   selection: CheckoutSelection,
 ): Promise<string> {
-  if (!env.BILLING_RETURN_URL) throw new HttpError(503, 'Billing is not configured.');
+  const billingConfig = requireBillingConfig(env);
   const priceId = priceForSelection(env, selection);
   await ensureAccount(env, userId);
   let account = await getAccountRow(env, userId);
@@ -112,8 +114,8 @@ export async function createCheckout(
     'metadata[cortex_plan]': selection.plan,
     'metadata[billing_interval]': selection.interval,
     allow_promotion_codes: 'true',
-    success_url: `${env.BILLING_RETURN_URL}?checkout=success`,
-    cancel_url: `${env.BILLING_RETURN_URL}?checkout=cancelled`,
+    success_url: `${billingConfig.returnUrl}?checkout=success`,
+    cancel_url: `${billingConfig.returnUrl}?checkout=cancelled`,
   });
   const payload = await stripeRequest(
     env,
@@ -128,8 +130,8 @@ export async function createCheckout(
 
 export async function createPortal(env: Env, customerId: string | null): Promise<string> {
   if (!customerId) throw new HttpError(409, 'No Stripe customer is linked to this account.');
-  if (!env.BILLING_RETURN_URL) throw new HttpError(503, 'Billing is not configured.');
-  const body = new URLSearchParams({ customer: customerId, return_url: env.BILLING_RETURN_URL });
+  const billingConfig = requireBillingConfig(env);
+  const body = new URLSearchParams({ customer: customerId, return_url: billingConfig.returnUrl });
   if (env.STRIPE_PORTAL_CONFIGURATION_ID) {
     body.set('configuration', env.STRIPE_PORTAL_CONFIGURATION_ID);
   }
@@ -147,12 +149,12 @@ async function stripeRequest(
   body?: URLSearchParams,
   idempotencyKey?: string,
 ): Promise<Record<string, unknown>> {
-  if (!env.STRIPE_SECRET_KEY) throw new HttpError(503, 'Billing is not configured.');
+  const { secretKey } = requireBillingConfig(env);
   const query = method === 'GET' && body ? `?${body.toString()}` : '';
   const response = await fetch(`https://api.stripe.com${route}${query}`, {
     method,
     headers: {
-      Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+      Authorization: `Bearer ${secretKey}`,
       ...(method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
       ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },

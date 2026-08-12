@@ -1,7 +1,7 @@
 import { cortexReasoningModeSchema } from '@cortex/ai/contracts';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { assertAiProviderConfigured, createProviderRequest } from './ai-policy';
+import { createProviderRequest } from './ai-policy';
 import { authenticateRequest, HttpError } from './auth';
 import {
   applyStripeEvent,
@@ -22,6 +22,12 @@ import {
   recordProviderUsage,
 } from './db';
 import type { AuthIdentity, Env } from './env';
+import {
+  ConfigurationError,
+  isFreeOnly,
+  requireAiProviderConfig,
+  requireStripeWebhookSecret,
+} from './runtime-config';
 
 interface Variables {
   identity: AuthIdentity;
@@ -77,7 +83,17 @@ const stripeEventSchema = z.object({
 app.onError((error, c) => {
   if (error instanceof HttpError) return c.json({ error: error.message }, error.status as 400);
   if (error instanceof z.ZodError) return c.json({ error: 'The request was not valid.' }, 400);
-  console.error('Cortex Cloud request failed', error instanceof Error ? error.message : 'unknown');
+  if (error instanceof ConfigurationError) {
+    console.error(JSON.stringify({ message: 'Worker configuration error', error: error.message }));
+    return c.json({ error: 'Cortex Cloud is not configured correctly.' }, 503);
+  }
+  console.error(
+    JSON.stringify({
+      message: 'Cortex Cloud request failed',
+      error: error instanceof Error ? error.message : 'unknown',
+      path: c.req.path,
+    }),
+  );
   return c.json({ error: 'Cortex Cloud could not complete the request.' }, 500);
 });
 
@@ -92,10 +108,12 @@ app.use('/v1/*', async (c, next) => {
 app.get('/v1/me', async (c) => {
   const userId = c.get('identity').userId;
   const account = await getAccountRow(c.env, userId);
-  try {
-    await reconcileStripeAccountIfStale(c.env, account);
-  } catch {
-    console.error('Cortex Cloud Stripe reconciliation deferred.');
+  if (!isFreeOnly(c.env)) {
+    try {
+      await reconcileStripeAccountIfStale(c.env, account);
+    } catch {
+      console.error(JSON.stringify({ message: 'Stripe reconciliation deferred' }));
+    }
   }
   const summary = await getAccountSummary(c.env, userId);
   return c.json({ plan: summary.plan, billing: summary.billing, ai: summary.ai });
@@ -108,8 +126,7 @@ app.get('/v1/ai/usage', async (c) => {
 
 app.get('/v1/admin/ai-metrics', async (c) => {
   const allowed = new Set(
-    (c.env.CORTEX_ADMIN_WORKOS_USER_IDS ?? '')
-      .split(',')
+    c.env.CORTEX_ADMIN_WORKOS_USER_IDS.split(',')
       .map((value) => value.trim())
       .filter(Boolean),
   );
@@ -120,6 +137,9 @@ app.get('/v1/admin/ai-metrics', async (c) => {
 });
 
 app.post('/v1/ai/chat', async (c) => {
+  if (isFreeOnly(c.env)) {
+    throw new HttpError(403, 'Hosted Cortex AI is disabled in this free-only build.');
+  }
   const contentLength = Number(c.req.header('content-length') ?? 0);
   if (contentLength > MAX_REQUEST_BYTES)
     throw new HttpError(413, 'Cortex AI context is too large.');
@@ -140,11 +160,7 @@ app.post('/v1/ai/chat', async (c) => {
   if (input.final !== input.stream) {
     throw new HttpError(400, 'Final Cortex responses must use streaming.');
   }
-  try {
-    assertAiProviderConfigured(c.env.OPENROUTER_API_KEY);
-  } catch {
-    throw new HttpError(503, 'Cortex Cloud is not configured correctly.');
-  }
+  const providerConfig = requireAiProviderConfig(c.env);
   const identity = c.get('identity');
   const workingContextTokens = estimateWorkingContextTokens(input.messages);
   const authorization = await authorizeRunCall(c.env, identity.userId, {
@@ -159,7 +175,7 @@ app.post('/v1/ai/chat', async (c) => {
     upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${c.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${providerConfig.apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://github.com/IEver3st/Cortex-Toolbox',
         'X-Title': 'Cortex Toolbox',
@@ -232,21 +248,30 @@ app.post('/v1/ai/runs/:runId/applied', async (c) => {
 });
 
 app.post('/v1/billing/checkout', async (c) => {
+  if (isFreeOnly(c.env)) {
+    throw new HttpError(403, 'Paid Cortex plans are disabled in this free-only build.');
+  }
   const input = checkoutSchema.parse(await c.req.json());
   return c.json({ url: await createCheckout(c.env, c.get('identity').userId, input) });
 });
 
 app.post('/v1/billing/portal', async (c) => {
+  if (isFreeOnly(c.env)) {
+    throw new HttpError(403, 'Paid Cortex plans are disabled in this free-only build.');
+  }
   const account = await getAccountSummary(c.env, c.get('identity').userId);
   return c.json({ url: await createPortal(c.env, account.stripeCustomerId) });
 });
 
 const stripeWebhook = async (c: Context<AppBindings>) => {
+  if (isFreeOnly(c.env)) {
+    throw new HttpError(403, 'Stripe billing is disabled in this free-only build.');
+  }
   const body = await c.req.text();
   await verifyStripeSignature(
     body,
     c.req.header('stripe-signature') ?? null,
-    c.env.STRIPE_WEBHOOK_SECRET,
+    requireStripeWebhookSecret(c.env),
   );
   let eventBody: unknown;
   try {

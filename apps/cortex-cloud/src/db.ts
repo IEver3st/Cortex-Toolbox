@@ -12,6 +12,7 @@ import {
   type RunPolicy,
 } from './ai-policy';
 import type { Env } from './env';
+import { isFreeOnly, isHostedAiEnabled } from './runtime-config';
 
 export type BillingStatus =
   | 'none'
@@ -67,7 +68,7 @@ const MIN_RUN_AUTHORIZATION: Record<CortexReasoningMode, number> = {
 const BASETEN_INPUT_MICROUSD_PER_100_TOKENS = 13;
 const BASETEN_OUTPUT_MICROUSD_PER_100_TOKENS = 26;
 
-export function envFlag(value: string | undefined, defaultValue = true): boolean {
+export function envFlag(value: string | undefined, defaultValue = false): boolean {
   if (value === undefined || value === '') return defaultValue;
   return !['0', 'false', 'off', 'no'].includes(value.trim().toLowerCase());
 }
@@ -156,9 +157,11 @@ export async function getAccountRow(env: Env, userId: string): Promise<AccountRo
 
 export async function getAccountSummary(env: Env, userId: string, now = new Date()) {
   const account = await getAccountRow(env, userId);
-  const paid = paidPolicy(account.plan);
-  const statusAllowsAi = subscriptionPermitsAi(account.billing_status);
-  const globallyEnabled = envFlag(env.CORTEX_AI_ENABLED) && envFlag(env.AI_PROVIDER_ENABLED);
+  const freeOnly = isFreeOnly(env);
+  const plan: CortexPlan = freeOnly ? 'free' : account.plan;
+  const paid = paidPolicy(plan);
+  const statusAllowsAi = !freeOnly && subscriptionPermitsAi(account.billing_status);
+  const globallyEnabled = isHostedAiEnabled(env);
   const entitled = Boolean(paid && statusAllowsAi);
   let usage = {
     percent: 0,
@@ -188,15 +191,24 @@ export async function getAccountSummary(env: Env, userId: string, now = new Date
   }
 
   return {
-    plan: account.plan,
-    billing: {
-      interval: account.billing_interval,
-      subscriptionStatus: account.billing_status,
-      cancelAtPeriodEnd: account.cancel_at_period_end === 1,
-      renewsAt: account.subscription_current_period_end,
-      stripeCustomerPresent: Boolean(account.stripe_customer_id),
-      paymentFailed: Boolean(account.payment_failed_at),
-    },
+    plan,
+    billing: freeOnly
+      ? {
+          interval: null,
+          subscriptionStatus: 'none' as const,
+          cancelAtPeriodEnd: false,
+          renewsAt: null,
+          stripeCustomerPresent: false,
+          paymentFailed: false,
+        }
+      : {
+          interval: account.billing_interval,
+          subscriptionStatus: account.billing_status,
+          cancelAtPeriodEnd: account.cancel_at_period_end === 1,
+          renewsAt: account.subscription_current_period_end,
+          stripeCustomerPresent: Boolean(account.stripe_customer_id),
+          paymentFailed: Boolean(account.payment_failed_at),
+        },
     ai: {
       entitled,
       enabled:
@@ -252,13 +264,16 @@ export async function authorizeRunCall(
   },
   now = new Date(),
 ): Promise<RunAuthorization> {
+  if (isFreeOnly(env)) {
+    throw new HttpError(403, 'Hosted Cortex AI is disabled in this free-only build.');
+  }
   await cleanupExpiredReservations(env, userId, now);
   const account = await getAccountRow(env, userId);
   const policy = paidPolicy(account.plan);
   if (!policy || !subscriptionPermitsAi(account.billing_status)) {
     throw new HttpError(402, 'Cortex AI is available with Creator or Pro.');
   }
-  if (!envFlag(env.CORTEX_AI_ENABLED) || !envFlag(env.AI_PROVIDER_ENABLED)) {
+  if (!isHostedAiEnabled(env)) {
     throw new HttpError(503, 'Cortex AI is temporarily unavailable.');
   }
   if (account.ai_enabled !== 1 || account.administratively_disabled === 1) {

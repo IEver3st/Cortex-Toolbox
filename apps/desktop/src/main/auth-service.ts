@@ -51,7 +51,7 @@ export class CortexAuthService {
   constructor(private readonly env: MainEnv) {
     // The placeholder is never sent: every network entrypoint first calls
     // assertConfigured(). It keeps the public-client SDK inert in local builds.
-    this.workos = createWorkOS({ clientId: env.CORTEX_WORKOS_CLIENT_ID || 'client_unconfigured' });
+    this.workos = createWorkOS({ clientId: env.CORTEX_WORKOS_CLIENT_ID || 'client_t1' });
   }
 
   configured(): boolean {
@@ -204,6 +204,12 @@ export class CortexAuthService {
   private async validSession(): Promise<StoredSession | null> {
     const session = this.readSession();
     if (!session) return null;
+    if (jwtStringClaim(session.accessToken, 'client_id') !== this.env.CORTEX_WORKOS_CLIENT_ID) {
+      secureSecrets.remove('workos-session');
+      this.expired = true;
+      this.notice = 'This Cortex session belongs to a different build. Sign in again.';
+      return null;
+    }
     const expiresAt = jwtNumberClaim(session.accessToken, 'exp');
     if (expiresAt !== null && Date.now() < expiresAt * 1_000 - 10_000) return session;
     try {
@@ -406,6 +412,11 @@ function decodeJwt(token: string): Record<string, unknown> | null {
 function jwtNumberClaim(token: string, claim: string): number | null {
   const value = decodeJwt(token)?.[claim];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function jwtStringClaim(token: string, claim: string): string | null {
+  const value = decodeJwt(token)?.[claim];
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function isTerminalRefreshError(error: unknown): boolean {

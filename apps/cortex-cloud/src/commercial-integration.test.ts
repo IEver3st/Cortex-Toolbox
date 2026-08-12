@@ -5,24 +5,31 @@ import type { Env } from './env';
 import { createTestD1 } from './test-d1';
 
 const PRICE = {
-  creatorMonth: 'price_1U2PuXQqaHP22wnxni38nsWc',
-  creatorYear: 'price_1U2PueQqaHP22wnxROZLdlkX',
-  proMonth: 'price_1U2PulQqaHP22wnxUhu72m9y',
-  proYear: 'price_1U2PurQqaHP22wnxp58We6AZ',
+  creatorMonth: 'price_t1',
+  creatorYear: 'price_t2',
+  proMonth: 'price_t3',
+  proYear: 'price_t4',
 };
 
 function testEnv(): Env {
   return {
     DB: createTestD1().binding,
     WORKOS_CLIENT_ID: 'client_test',
-    OPENROUTER_API_KEY: 'or_test',
-    STRIPE_SECRET_KEY: 'sk_test_not_live',
-    STRIPE_WEBHOOK_SECRET: 'whsec_test',
+    WORKOS_ISSUER: 'https://api.workos.com/',
+    OPENROUTER_API_KEY: 'provider-test-secret',
+    CORTEX_AI_ENABLED: 'true',
+    AI_PROVIDER_ENABLED: 'true',
+    CORTEX_FREE_ONLY: 'false',
+    STRIPE_SECRET_KEY: 'stripe-test-secret',
+    STRIPE_WEBHOOK_SECRET: 'webhook-test-secret',
     STRIPE_CREATOR_MONTHLY_PRICE_ID: PRICE.creatorMonth,
     STRIPE_CREATOR_ANNUAL_PRICE_ID: PRICE.creatorYear,
     STRIPE_PRO_MONTHLY_PRICE_ID: PRICE.proMonth,
     STRIPE_PRO_ANNUAL_PRICE_ID: PRICE.proYear,
+    STRIPE_PORTAL_CONFIGURATION_ID: '',
     BILLING_RETURN_URL: 'https://cortex.example/account',
+    STRIPE_RECONCILE_AFTER_SECONDS: '900',
+    CORTEX_ADMIN_WORKOS_USER_IDS: '',
   };
 }
 

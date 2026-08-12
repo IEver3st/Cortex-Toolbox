@@ -5,3 +5,4 @@ coverage
 pnpm-lock.yaml
 *.zip
 DeepseekTest
+apps/cortex-cloud/src/worker-configuration.d.ts

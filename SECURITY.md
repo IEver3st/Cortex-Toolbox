@@ -33,6 +33,21 @@ Out of scope:
 
 ## Safe defaults
 
-- Never commit `.env`, `.env.local`, report tokens, or signing certificates.
+- Never commit `.env`, `.dev.vars`, credentials, deployment IDs, report tokens, or signing certificates.
 - Public release builds should not embed `CORTEX_GITHUB_REPORT_TOKEN`.
 - Packaged Windows installers should be distributed only through verified GitHub release assets with published SHA-256 checksums.
+
+## Configuration and credential incidents
+
+Secrets belong in Cloudflare secret storage, GitHub Actions Secrets, or an owner-controlled local environment. Production WorkOS, Stripe catalogue, Cloudflare resource, and endpoint identifiers belong in deployment configuration, not source.
+
+If a credential is accidentally committed:
+
+1. stop sharing or deploying the affected ref;
+2. revoke or rotate the credential with the issuing service immediately;
+3. report the incident privately through a security advisory;
+4. remove the value from the working tree and sanitise every reachable Git ref;
+5. force-push only after coordinating with repository owners, then ask every clone owner to re-clone;
+6. run `pnpm security:scan` and a full-history Gitleaks scan before resuming publication.
+
+Deleting the latest copy is not sufficient because Git history is permanent once published.

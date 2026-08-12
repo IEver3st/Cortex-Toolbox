@@ -192,8 +192,27 @@ describe('WorkOS native public-client session', () => {
     expect(mocks.openExternal).not.toHaveBeenCalled();
     expect(mocks.secrets.has('workos-session')).toBe(false);
   });
+
+  it('expires a saved session issued for a different WorkOS client', async () => {
+    mocks.secrets.set(
+      'workos-session',
+      JSON.stringify({
+        accessToken: token({ exp: 4_000_000_000, client_id: 'client_previous' }),
+        refreshToken: 'refresh_previous',
+        user: USER,
+      }),
+    );
+    const service = new CortexAuthService(env());
+
+    await expect(service.status()).resolves.toMatchObject({
+      status: 'expired',
+      message: 'This Cortex session belongs to a different build. Sign in again.',
+    });
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.secrets.has('workos-session')).toBe(false);
+  });
 });
 
 function token(payload: Record<string, unknown>): string {
-  return `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.signature`;
+  return `header.${Buffer.from(JSON.stringify({ client_id: 'client_01', ...payload })).toString('base64url')}.signature`;
 }

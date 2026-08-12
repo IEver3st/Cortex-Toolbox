@@ -20,6 +20,8 @@ jobs:
       CORTEX_GITHUB_OWNER: ${{ github.repository_owner }}
       CORTEX_GITHUB_REPOSITORY: ${{ github.event.repository.name }}
       CORTEX_ENABLE_AUTO_UPDATE: 'true'
+      CORTEX_WORKOS_CLIENT_ID: ${{ vars.CORTEX_WORKOS_CLIENT_ID }}
+      CORTEX_CLOUD_API_URL: ${{ vars.CORTEX_CLOUD_API_URL }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -27,6 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm security:scan
+      - run: pnpm audit --audit-level high
       - run: pnpm icons
       - name: Package Windows installer
         shell: bash

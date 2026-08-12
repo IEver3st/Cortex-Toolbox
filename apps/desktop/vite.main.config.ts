@@ -3,8 +3,11 @@ import { resolveChannel } from './src/shared/branding';
 import { readLocalEnv } from './src/main/config/env';
 
 export default defineConfig(({ mode }) => {
-  const buildEnv = loadEnv(mode, import.meta.dirname, 'CORTEX_');
-  const localEnv = readLocalEnv();
+  // Release builds accept deployment coordinates only from the explicit build
+  // environment. A developer's ignored .env files must never contaminate a package.
+  const productionBuild = mode === 'production';
+  const buildEnv = productionBuild ? {} : loadEnv(mode, import.meta.dirname, 'CORTEX_');
+  const localEnv = productionBuild ? {} : readLocalEnv();
   const githubOwner = process.env.CORTEX_GITHUB_OWNER ?? buildEnv.CORTEX_GITHUB_OWNER ?? '';
   const githubRepository =
     process.env.CORTEX_GITHUB_REPOSITORY ?? buildEnv.CORTEX_GITHUB_REPOSITORY ?? '';
@@ -41,7 +44,7 @@ export default defineConfig(({ mode }) => {
       __CORTEX_CLOUD_API_URL__: JSON.stringify(cloudApiUrl),
     },
     build: {
-      sourcemap: true,
+      sourcemap: !productionBuild,
       rollupOptions: {
         external: ['electron'],
         output: { entryFileNames: 'main.cjs', format: 'cjs' },

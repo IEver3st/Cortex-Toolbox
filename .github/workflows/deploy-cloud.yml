@@ -1,0 +1,48 @@
+name: Deploy Cortex Cloud
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
+      CLOUDFLARE_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME || 'cortex-cloud' }}
+      CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME || 'cortex-cloud' }}
+      WORKOS_CLIENT_ID: ${{ vars.WORKOS_CLIENT_ID }}
+      WORKOS_ISSUER: ${{ vars.WORKOS_ISSUER || 'https://api.workos.com/' }}
+      STRIPE_CREATOR_MONTHLY_PRICE_ID: ${{ vars.STRIPE_CREATOR_MONTHLY_PRICE_ID }}
+      STRIPE_CREATOR_ANNUAL_PRICE_ID: ${{ vars.STRIPE_CREATOR_ANNUAL_PRICE_ID }}
+      STRIPE_PRO_MONTHLY_PRICE_ID: ${{ vars.STRIPE_PRO_MONTHLY_PRICE_ID }}
+      STRIPE_PRO_ANNUAL_PRICE_ID: ${{ vars.STRIPE_PRO_ANNUAL_PRICE_ID }}
+      STRIPE_PORTAL_CONFIGURATION_ID: ${{ vars.STRIPE_PORTAL_CONFIGURATION_ID }}
+      BILLING_RETURN_URL: ${{ vars.BILLING_RETURN_URL }}
+      CORTEX_AI_ENABLED: ${{ vars.CORTEX_AI_ENABLED }}
+      AI_PROVIDER_ENABLED: ${{ vars.AI_PROVIDER_ENABLED }}
+      CORTEX_FREE_ONLY: ${{ vars.CORTEX_FREE_ONLY }}
+      STRIPE_RECONCILE_AFTER_SECONDS: ${{ vars.STRIPE_RECONCILE_AFTER_SECONDS || '900' }}
+      CORTEX_ADMIN_WORKOS_USER_IDS: ${{ vars.CORTEX_ADMIN_WORKOS_USER_IDS }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm security:scan
+      - run: pnpm --filter @cortex/cloud run verify:config
+      - run: pnpm --filter @cortex/cloud run check:bindings
+      - name: Verify required Cloudflare secrets exist
+        shell: bash
+        run: |
+          pnpm --filter @cortex/cloud exec wrangler secret list --json > "$RUNNER_TEMP/cortex-secret-names.json"
+          node -e "const fs=require('fs');const rows=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const names=new Set(rows.map(x=>x.name));const required=['OPENROUTER_API_KEY','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET'];const missing=required.filter(x=>!names.has(x));if(missing.length)throw new Error('Missing Cloudflare secrets: '+missing.join(', '));" "$RUNNER_TEMP/cortex-secret-names.json"
+      - run: pnpm --filter @cortex/cloud run deploy:dry-run
+      - run: pnpm --filter @cortex/cloud run migrate:production
+      - run: pnpm --filter @cortex/cloud deploy

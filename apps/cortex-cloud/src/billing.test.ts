@@ -10,19 +10,19 @@ import {
 import type { Env } from './env';
 
 const env = {
-  STRIPE_CREATOR_MONTHLY_PRICE_ID: 'price_1U2PuXQqaHP22wnxni38nsWc',
-  STRIPE_CREATOR_ANNUAL_PRICE_ID: 'price_1U2PueQqaHP22wnxROZLdlkX',
-  STRIPE_PRO_MONTHLY_PRICE_ID: 'price_1U2PulQqaHP22wnxUhu72m9y',
-  STRIPE_PRO_ANNUAL_PRICE_ID: 'price_1U2PurQqaHP22wnxp58We6AZ',
+  STRIPE_CREATOR_MONTHLY_PRICE_ID: 'price_t1',
+  STRIPE_CREATOR_ANNUAL_PRICE_ID: 'price_t2',
+  STRIPE_PRO_MONTHLY_PRICE_ID: 'price_t3',
+  STRIPE_PRO_ANNUAL_PRICE_ID: 'price_t4',
 } as Env;
 
 describe('Stripe entitlement authority', () => {
   it('maps all four server-owned plan selections to the approved prices', () => {
     expect(pricePolicies(env)).toEqual([
-      { plan: 'creator', interval: 'month', priceId: 'price_1U2PuXQqaHP22wnxni38nsWc' },
-      { plan: 'creator', interval: 'year', priceId: 'price_1U2PueQqaHP22wnxROZLdlkX' },
-      { plan: 'pro', interval: 'month', priceId: 'price_1U2PulQqaHP22wnxUhu72m9y' },
-      { plan: 'pro', interval: 'year', priceId: 'price_1U2PurQqaHP22wnxp58We6AZ' },
+      { plan: 'creator', interval: 'month', priceId: 'price_t1' },
+      { plan: 'creator', interval: 'year', priceId: 'price_t2' },
+      { plan: 'pro', interval: 'month', priceId: 'price_t3' },
+      { plan: 'pro', interval: 'year', priceId: 'price_t4' },
     ]);
     expect(priceForSelection(env, { plan: 'creator', interval: 'month' })).toBe(
       env.STRIPE_CREATOR_MONTHLY_PRICE_ID,
@@ -41,19 +41,24 @@ describe('Stripe entitlement authority', () => {
       pricePolicies({ ...env, STRIPE_PRO_ANNUAL_PRICE_ID: env.STRIPE_PRO_MONTHLY_PRICE_ID }),
     ).toThrow('invalid');
     expect(() => pricePolicies({ ...env, STRIPE_CREATOR_MONTHLY_PRICE_ID: '' })).toThrow(
-      'not configured',
+      'STRIPE_CREATOR_MONTHLY_PRICE_ID',
     );
   });
 
   it('accepts a current valid webhook signature and rejects forged or stale signatures', async () => {
     const body = '{"id":"evt_1"}';
     const timestamp = 1_800_000_000;
-    const signature = await testSignature(`${timestamp}.${body}`, 'whsec_test');
+    const signature = await testSignature(`${timestamp}.${body}`, 'webhook-test-secret');
     await expect(
-      verifyStripeSignature(body, `t=${timestamp},v1=${signature}`, 'whsec_test', timestamp),
+      verifyStripeSignature(
+        body,
+        `t=${timestamp},v1=${signature}`,
+        'webhook-test-secret',
+        timestamp,
+      ),
     ).resolves.toBeUndefined();
     await expect(
-      verifyStripeSignature('{}', 't=1,v1=forged', 'whsec_test', 10_000),
+      verifyStripeSignature('{}', 't=1,v1=forged', 'webhook-test-secret', 10_000),
     ).rejects.toThrow('timestamp');
   });
 

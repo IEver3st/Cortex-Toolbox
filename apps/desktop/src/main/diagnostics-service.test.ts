@@ -96,4 +96,32 @@ describe('formatBugReportBody', () => {
     expect(body).not.toContain('ghp_exampleSecretValue');
     expect(body).toContain('[REDACTED]');
   });
+
+  it('redacts provider credentials, JWTs, and deployment identifiers', () => {
+    const body = formatBugReportBody(
+      {
+        reportType: 'bug',
+        title: 'Hosted request fails',
+        description: [
+          `provider=${'sk-or-' + 'x'.repeat(32)}`,
+          `publishable=${'pk_live_' + 'x'.repeat(24)}`,
+          `client=${'client_' + 'x'.repeat(24)}`,
+          `environment=${'environment_' + 'x'.repeat(24)}`,
+          `customer=${'cus_' + 'x'.repeat(24)}`,
+          `token=${['eyJ' + 'a'.repeat(16), 'b'.repeat(16), 'c'.repeat(16)].join('.')}`,
+        ].join(' '),
+        steps: `Open ${'https://' + 'private-project.example.workers.dev'}.`,
+        includeDiagnostics: false,
+      },
+      context,
+      logs,
+    );
+    expect(body).not.toContain('sk-or-');
+    expect(body).not.toContain('pk_live_');
+    expect(body).not.toContain('client_');
+    expect(body).not.toContain('environment_');
+    expect(body).not.toContain('cus_');
+    expect(body).not.toContain('eyJ');
+    expect(body).not.toContain('workers.dev');
+  });
 });

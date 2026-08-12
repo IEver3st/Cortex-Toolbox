@@ -57,6 +57,15 @@ function cleanText(value: string, maximum = MAX_LOG_MESSAGE_LENGTH): string {
       '$1[REDACTED]',
     )
     .replace(/\b(?:ghp|github_pat)_[A-Za-z0-9_]+\b/g, '[REDACTED]')
+    .replace(/\bsk-or-[A-Za-z0-9_-]+\b/gi, '[REDACTED]')
+    .replace(/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_-]+\b/gi, '[REDACTED]')
+    .replace(/\bwhsec_[A-Za-z0-9_-]+\b/gi, '[REDACTED]')
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED]')
+    .replace(
+      /\b(?:client|environment|price|prod|bpc|acct|cus|sub)_[A-Za-z0-9_-]{12,}\b/gi,
+      '[REDACTED]',
+    )
+    .replace(/https:\/\/[A-Za-z0-9.-]+\.workers\.dev\b/gi, '[REDACTED_ENDPOINT]')
     .slice(0, maximum);
 }
 

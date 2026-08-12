@@ -5,9 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "verify:config": "node scripts/verify-config.mjs",
+    "types:bindings": "wrangler types src/worker-configuration.d.ts --env-interface CloudflareBindings --include-runtime false --strict-vars false",
+    "check:bindings": "wrangler types src/worker-configuration.d.ts --env-interface CloudflareBindings --include-runtime false --strict-vars false --check",
+    "verify:config": "tsx scripts/verify-config.ts",
+    "prepare:deploy-config": "tsx scripts/generate-deploy-config.ts",
+    "deploy:dry-run": "pnpm run prepare:deploy-config && wrangler deploy --config .wrangler/deploy/wrangler.production.toml --dry-run",
     "stripe:setup": "node scripts/setup-stripe.mjs",
-    "deploy": "pnpm run verify:config && wrangler deploy",
+    "deploy": "pnpm run verify:config && pnpm run check:bindings && pnpm run prepare:deploy-config && wrangler deploy --config .wrangler/deploy/wrangler.production.toml",
+    "migrate:production": "pnpm run prepare:deploy-config && wrangler d1 migrations apply DB --remote --config .wrangler/deploy/wrangler.production.toml",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -18,9 +23,9 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260808.1",
+    "@cloudflare/workers-types": "5.20260811.1",
     "typescript": "5.9.3",
     "vitest": "4.1.10",
-    "wrangler": "4.120.0"
+    "wrangler": "4.120.1"
   }
 }

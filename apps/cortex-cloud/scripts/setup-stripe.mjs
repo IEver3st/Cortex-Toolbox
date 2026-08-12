@@ -1,6 +1,6 @@
 const PRODUCTS = {
-  creator: 'prod_V2UrxUNT6VYpQA',
-  pro: 'prod_V2Ur5t20SdTTZQ',
+  creator: required(process.env.STRIPE_CREATOR_PRODUCT_ID, 'Set STRIPE_CREATOR_PRODUCT_ID.'),
+  pro: required(process.env.STRIPE_PRO_PRODUCT_ID, 'Set STRIPE_PRO_PRODUCT_ID.'),
 };
 
 /** @type {Array<{plan: 'creator' | 'pro', interval: 'month' | 'year', variable: string, expectedAmount: number}>} */
@@ -48,7 +48,7 @@ for (const policy of PRICES) {
     );
   }
   resolved.push({ plan: policy.plan, interval: policy.interval, id });
-  console.log(`Verified ${policy.plan}/${policy.interval}: ${id}`);
+  console.log(`Verified configured ${policy.plan}/${policy.interval} price.`);
 }
 
 if (!process.argv.includes('--apply-portal')) {

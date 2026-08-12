@@ -69,7 +69,7 @@ describe('resource auditor', () => {
   });
 
   it('flags sensitive content without leaking the secret', () => {
-    const secret = 'super-secret-password-value-12345';
+    const secret = ['test', 'credential', 'value'].join('-');
     const findings = auditResource(
       [{ relativePath: 'config.lua', name: 'config.lua', extension: '.lua', bytes: 40 }],
       parseManifest("fx_version 'cerulean'\ngame 'gta5'\nclient_script 'config.lua'"),

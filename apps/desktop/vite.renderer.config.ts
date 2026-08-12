@@ -45,7 +45,7 @@ const workspaceAliases = workspacePackages.flatMap((packageName) => {
   ];
 });
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // Local workspace packages change during desktop development. Serving their
   // source avoids stale optimized-dependency export maps after an API changes.
   optimizeDeps: { exclude: workspacePackages },
@@ -64,5 +64,5 @@ export default defineConfig({
     __CORTEX_IS_BETA__: JSON.stringify(brand.isBeta),
     __CORTEX_APP_VERSION__: JSON.stringify(packageJson.version),
   },
-  build: { sourcemap: true },
-});
+  build: { sourcemap: mode !== 'production' },
+}));

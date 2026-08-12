@@ -15,6 +15,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm security:scan
+      - run: pnpm audit --audit-level high
       - run: pnpm test && pnpm typecheck && pnpm lint
       - name: Detect release channel from tag
         id: channel
@@ -28,12 +30,27 @@ jobs:
           fi
       - name: Build icons
         run: pnpm icons
+      - name: Prepare optional Windows signing certificate
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.CORTEX_WINDOWS_CERTIFICATE_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERTIFICATE_BASE64)) {
+            Write-Output 'No signing certificate configured; producing an unsigned build.'
+            exit 0
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'cortex-signing.p12'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+          "CORTEX_WINDOWS_CERTIFICATE_FILE=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Package Windows installer
         env:
           CORTEX_RELEASE_CHANNEL: ${{ steps.channel.outputs.name }}
           CORTEX_GITHUB_OWNER: ${{ github.repository_owner }}
           CORTEX_GITHUB_REPOSITORY: ${{ github.event.repository.name }}
           CORTEX_ENABLE_AUTO_UPDATE: 'true'
+          CORTEX_WORKOS_CLIENT_ID: ${{ vars.CORTEX_WORKOS_CLIENT_ID }}
+          CORTEX_CLOUD_API_URL: ${{ vars.CORTEX_CLOUD_API_URL }}
+          CORTEX_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.CORTEX_WINDOWS_CERTIFICATE_PASSWORD }}
         shell: bash
         run: |
           if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then

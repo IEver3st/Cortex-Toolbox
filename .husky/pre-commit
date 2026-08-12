@@ -1,1 +1,2 @@
+pnpm security:scan --staged
 pnpm lint-staged

@@ -51,7 +51,7 @@ describe('Cortex Cloud AI boundary', () => {
     const response = await app.request(
       '/v1/stripe/webhook',
       { method: 'POST', body: '{"id":"evt_forged"}' },
-      { STRIPE_WEBHOOK_SECRET: 'whsec_test' },
+      { STRIPE_WEBHOOK_SECRET: 'webhook-test-secret', CORTEX_FREE_ONLY: 'false' },
     );
     expect(response.status).toBe(400);
   });

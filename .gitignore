@@ -17,15 +17,34 @@ playwright-report/
 .nyc_output/
 
 # Runtime / local env (never commit secrets or local overrides)
-.env.local
 .env
-.env.development
-.env.production
-.env.*.local
+.env.*
 !.env.example
-apps/cortex-cloud/.dev.vars
-apps/cortex-cloud/.dev.vars.*
-!apps/cortex-cloud/.dev.vars.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.envrc
+.direnv/
+credentials.json
+credentials.*.json
+service-account*.json
+secrets/
+.private/
+
+# Certificates and signing keys (never commit private material)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+.ssh/
+signing/
 
 # IDE and tool state
 .vscode/*
@@ -92,3 +111,19 @@ yarn-error.log*
 .eslintcache
 .prettiercache
 *.tsbuildinfo
+.wrangler/
+*.cpuprofile
+*.sarif
+gitleaks-report.*
+
+# Source maps
+*.map
+
+# Local owner-only setup playbooks (public deployment docs stay tracked)
+CORTEX_AI_*.html
+*PRODUCTION_SETUP*
+RELEASE_READINESS*.md
+release-audit*.md
+
+# Large marketing/design assets not intended for source control
+marketing-assets/

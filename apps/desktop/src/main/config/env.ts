@@ -49,16 +49,22 @@ export function readLocalEnv(): Record<string, string> {
   ];
   const values: Record<string, string> = {};
   for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
-    for (const line of readFileSync(candidate, 'utf8').split(/\r?\n/)) {
-      const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
-      if (!match?.[1] || match[2] === undefined) continue;
-      const raw = match[2];
-      values[match[1]] =
-        (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))
-          ? raw.slice(1, -1)
-          : raw;
-    }
+    Object.assign(values, readEnvFile(candidate));
+  }
+  return values;
+}
+
+export function readEnvFile(candidate: string): Record<string, string> {
+  if (!existsSync(candidate)) return {};
+  const values: Record<string, string> = {};
+  for (const line of readFileSync(candidate, 'utf8').split(/\r?\n/)) {
+    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (!match?.[1] || match[2] === undefined) continue;
+    const raw = match[2];
+    values[match[1]] =
+      (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))
+        ? raw.slice(1, -1)
+        : raw;
   }
   return values;
 }
