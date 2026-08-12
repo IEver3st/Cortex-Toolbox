@@ -23,7 +23,7 @@ jobs:
       CORTEX_WORKOS_CLIENT_ID: ${{ vars.CORTEX_WORKOS_CLIENT_ID }}
       CORTEX_CLOUD_API_URL: ${{ vars.CORTEX_CLOUD_API_URL }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with: { version: 10.33.0 }
       - uses: actions/setup-node@v4
