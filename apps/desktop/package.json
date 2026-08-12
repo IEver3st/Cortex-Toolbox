@@ -63,7 +63,7 @@
     "@electron-forge/maker-squirrel": "7.11.2",
     "@electron-forge/shared-types": "7.11.2",
     "@types/archiver": "8.0.0",
-    "@vitejs/plugin-react": "6.0.3",
+    "@vitejs/plugin-react": "6.0.5",
     "electron": "43.1.0",
     "vite": "8.1.4"
   }
