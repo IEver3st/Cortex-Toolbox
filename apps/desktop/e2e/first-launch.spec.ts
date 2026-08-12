@@ -689,7 +689,9 @@ test('standalone creative modules work without an open workspace', async () => {
   );
 
   await page.getByRole('button', { name: 'Pulse' }).click();
-  await expect(page.getByText('Pulse siren patterns', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('grid', { name: '24 channel, 32 step siren sequencer' }),
+  ).toBeVisible();
   const steps = page.getByRole('gridcell');
   await expect(steps).toHaveCount(768);
   await expect(page.locator('.pulse-lightbar button')).toHaveCount(24);
