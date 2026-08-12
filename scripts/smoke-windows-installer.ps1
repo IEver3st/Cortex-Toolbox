@@ -35,6 +35,32 @@ function Stop-InstalledProcesses([string]$ExecutablePath) {
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
+function Wait-InstalledProcessesExit([string]$ExecutablePath, [int]$TimeoutMilliseconds) {
+  if (-not $ExecutablePath) { return }
+  $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+  while ($true) {
+    $running = @(
+      Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -eq $ExecutablePath }
+    )
+    if ($running.Count -eq 0) { return }
+    if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMilliseconds) {
+      throw 'The installed application processes did not stop before uninstall.'
+    }
+    Start-Sleep -Milliseconds 250
+  }
+}
+
+function Wait-PathRemoval([string]$Path, [int]$TimeoutMilliseconds) {
+  $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+  while (Test-Path -LiteralPath $Path) {
+    if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMilliseconds) {
+      throw "The clean-runner uninstall left the installed application behind at $Path."
+    }
+    Start-Sleep -Milliseconds 250
+  }
+}
+
 try {
   New-Item -ItemType Directory -Path $profileRoot | Out-Null
   $setup = Start-Process -FilePath $installer -ArgumentList '--silent' -PassThru
@@ -62,6 +88,7 @@ try {
   Write-Host "Installed launch passed: $($installedExecutable.FullName)"
 } finally {
   Stop-InstalledProcesses $(if ($installedExecutable) { $installedExecutable.FullName } else { $null })
+  Wait-InstalledProcessesExit $(if ($installedExecutable) { $installedExecutable.FullName } else { $null }) 15000
   if ($installRoot) {
     $updater = Join-Path $installRoot 'Update.exe'
     if (Test-Path -LiteralPath $updater) {
@@ -74,7 +101,7 @@ try {
   }
 }
 
-if ($installedExecutable -and (Test-Path -LiteralPath $installedExecutable.FullName)) {
-  throw 'The clean-runner uninstall left the installed application behind.'
+if ($installedExecutable) {
+  Wait-PathRemoval $installedExecutable.FullName 30000
 }
 Write-Host 'Installer install, launch, and uninstall smoke passed.'
