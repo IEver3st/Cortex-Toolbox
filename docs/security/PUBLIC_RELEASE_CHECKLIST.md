@@ -8,7 +8,7 @@ Run this checklist from a fresh clone of the exact commit that will become publi
 - [ ] Gitleaks scans all remote branches and tags with full history and zero findings.
 - [ ] No `.env`, `.dev.vars`, credential, certificate, signing, log, profiler, or local Cloudflare state file is tracked.
 - [ ] No Stripe Product/Price/Portal ID, WorkOS Client ID, D1/account/resource ID, deployed Worker URL, or private endpoint appears in current source or reachable history.
-- [ ] Every pre-rewrite commit SHA that GitHub previously retained returns `404` through the Git Data API; GitHub Support has confirmed cached commit/PR views were purged.
+- [ ] Any replacement repository contains only the sanitized canonical branch; no legacy branch, tag, pull-request ref, release, Actions artifact, or recovery ref was transferred.
 - [ ] `.gitignore` still permits only safe example env files.
 
 ## Configuration boundaries

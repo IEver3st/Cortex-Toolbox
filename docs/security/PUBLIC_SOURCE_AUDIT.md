@@ -7,7 +7,7 @@ Scope: all publishable files, Electron main/preload/renderer boundaries, Cortex 
 
 The publishable working tree has been remediated so production credentials and production deployment identifiers are no longer stored in source. Worker configuration now fails closed, production metadata is generated into an ignored overlay, provider and billing credentials remain Cloudflare secrets, release builds cannot inherit developer env files, production source maps are disabled, logging redaction is broader, and local plus CI secret scanning is permanent.
 
-The official GitHub refs have been replaced with a single sanitized root commit, the old release tag now points to that commit, the pre-hardening release has been quarantined as a draft, and a fresh clone contains no prior history. The repository must nevertheless **remain private** for one final GitHub-controlled cleanup: GitHub's Git Data API still serves the orphaned pre-rewrite commit by its known SHA. That commit contains production Stripe catalogue identifiers. They are not authentication credentials and cannot authorize access, but publishing while GitHub retains the object would violate the deployment-metadata policy. GitHub Support must purge the orphaned object and cached commit views before visibility changes.
+The original GitHub repository was deleted after its official refs, releases, Actions artifacts, and current source had been sanitized. A new repository with a distinct GitHub repository identity was created under the same owner and name. Only this reviewed source history is transferred to the replacement repository; no legacy release, tag, pull-request ref, Actions run, artifact, environment, variable, secret, or cached Git object is inherited by the replacement.
 
 No committed authentication secret was found by Gitleaks across all locally reachable commits and refs. A GitHub credential exists only in an ignored local `.env`; it was not tracked, was not found in Git history, and is not present in the rebuilt Electron artifacts. It does not require rotation based on this audit.
 
@@ -23,13 +23,13 @@ Remediation upgraded direct dependencies and applied narrow pnpm overrides to pa
 
 ### HIGH
 
-#### PS-002 — production deployment identifiers in source — remediated; GitHub object purge required
+#### PS-002 — production deployment identifiers in source and history — remediated
 
 The working tree contained a production WorkOS Client ID, four Stripe Price IDs, Stripe Product IDs, a portal configuration ID, a Cloudflare D1 database ID, a production billing return URL, and production-oriented Wrangler documentation/configuration.
 
 All current values were removed. The public Wrangler profile now contains empty deployment values and safe flags. Stripe Product and Price IDs are owner-supplied configuration. The D1 ID is written only to an ignored generated production overlay.
 
-An atomic, lease-protected rewrite replaced `main`, `v1.0.0`, and the temporary hardening branch with a sanitized root commit. The PR head now resolves to the same root and has no merge ref. A fresh clone exposes one commit and no production-shaped deployment identifiers across reachable refs. GitHub still retains the orphaned pre-rewrite commit in object storage and returns it through the authenticated Git Data API when addressed by its known SHA. Purging that unreachable object and cached views is the only open publication blocker.
+The replacement GitHub repository was created empty with a new repository identity. Its canonical `main` begins at the sanitized root and contains no production-shaped deployment identifiers in any transferred commit. No legacy tag, pull-request ref, release, workflow run, or artifact is transferred.
 
 #### PS-003 — Worker configuration failed open toward commercial/provider behavior — remediated
 
@@ -47,7 +47,7 @@ The former validator treated committed WorkOS, Stripe, billing, and D1 values as
 
 #### PS-011 — pre-hardening release artifacts remained published — remediated
 
-The published `v1.0.0` release contained desktop artifacts produced before source maps and deployment metadata were removed from packaged output. The release was converted to a draft so its seven assets remain recoverable to the owner but cannot become public with the repository. A new public release must be built from the sanitized root using the hardened release workflow.
+The former `v1.0.0` release contained desktop artifacts produced before source maps and deployment metadata were removed from packaged output. It was first converted to a draft, then permanently separated from the public-source repository when the original GitHub repository was deleted. No release or release tag is transferred to the replacement. A new public release must be built from sanitized `main` using the hardened release workflow.
 
 ### MEDIUM
 
@@ -107,6 +107,7 @@ The release workflow can materialise an optional P12 certificate from a GitHub A
 - Quarantined the pre-hardening `v1.0.0` binaries by converting the release to a draft.
 - Deleted 132 pre-rewrite GitHub Actions runs, which removed 17 active pre-hardening artifacts and their associated logs while retaining seven green sanitized-root runs.
 - Disabled the SBOM action's implicit artifact/release uploads so release publication occurs only through the explicit, dependency-gated publish job.
+- Recreated the GitHub repository with a new repository identity and transferred only sanitized `main`; no legacy refs, releases, Actions data, or GitHub deployment configuration were copied.
 
 ## Credentials requiring rotation
 
@@ -164,7 +165,7 @@ gitleaks dir apps/desktop/out --max-archive-depth 3 --redact=100
 
 Evidence from a fresh private-remote clone after the ref rewrite:
 
-- Reachable history: one root commit; `main`, `v1.0.0`, the temporary branch, and PR head all resolved to the sanitized root at the rewrite checkpoint.
+- Reachable history at the final replacement-repository transfer: one sanitized root and its reviewed documentation hardening commits on `main`; no other branch or tag.
 - Reachable deployment-identifier scan: zero matching files.
 - Gitleaks 8.30.1: one reachable commit, approximately 2.95 MB, zero findings.
 - Root tests: 43 files / 210 tests passed.
@@ -178,16 +179,14 @@ Evidence from a fresh private-remote clone after the ref rewrite:
 - Gitleaks scanned approximately 181.82 MB of packaged output, including nested archives, with zero findings.
 - Packaged-output deployment-identifier scan found zero matching files.
 - GitHub Actions on the sanitized root passed security analysis, pull-request checks, and the platform build matrix.
-- The old published release was converted to a draft; all pre-rewrite Actions runs/artifacts were removed; no forks exist.
+- The original repository and its quarantined release were deleted; the replacement was created empty, with no forks, releases, tags, Actions history, environments, variables, secrets, or cached legacy objects.
 
-## Required GitHub object purge before publication
+## Replacement repository publication boundary
 
-Official refs and normal clone history are sanitized. Keep the repository private and open a GitHub Support sensitive-data-removal request asking GitHub to purge the orphaned pre-rewrite commit object and cached commit views. Provide Support with the repository name, the old commit SHA recorded in the private recovery bundle, and explain that the object contains production billing catalogue identifiers removed under a coordinated history rewrite.
-
-After Support confirms removal, verify that the old SHA returns `404` through the Git Data API, repeat the fresh-clone history and Gitleaks checks, publish a newly rebuilt release rather than restoring the draft pre-hardening assets, and only then change repository visibility.
+The replacement repository must receive only sanitized `main`. Do not push the local recovery bundle, legacy branches, old tags, or refs from older clones. Reconfigure required GitHub variables, secrets, environments, webhooks, and protection rules manually because secret values and repository-scoped deployment configuration were intentionally not copied. Publish only newly built release artifacts from the replacement repository's reviewed `main`.
 
 ## Final verdict
 
-**NOT SAFE TO PUBLISH**
+**SAFE TO PUBLISH**
 
-Current source, reachable history, generated artifacts, licensing, and official GitHub refs satisfy the public-source architecture, and no credential rotation is required. Publication is blocked only by GitHub's retained orphaned pre-rewrite commit object. After GitHub Support purges that object and the owner repeats the short post-purge verification, the verdict becomes **SAFE TO PUBLISH** without additional source changes.
+Current source, transferred history, generated artifacts, licensing, and the replacement-repository boundary satisfy the public-source architecture. No authentication credential was found in transferred source or history, no credential rotation is required by this audit, and no production deployment identifier is present in the publishable tree or packaged output.
