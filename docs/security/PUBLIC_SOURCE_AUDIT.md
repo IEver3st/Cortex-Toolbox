@@ -1,13 +1,13 @@
 # Cortex Toolbox public-source security audit
 
-Audit date: 2026-08-11
+Audit date: 2026-08-12
 Scope: all publishable files, Electron main/preload/renderer boundaries, Cortex Cloud Worker, Stripe, WorkOS, OpenRouter, CI/release configuration, Git history and refs, and generated Electron/Worker artifacts.
 
 ## Executive summary
 
 The publishable working tree has been remediated so production credentials and production deployment identifiers are no longer stored in source. Worker configuration now fails closed, production metadata is generated into an ignored overlay, provider and billing credentials remain Cloudflare secrets, release builds cannot inherit developer env files, production source maps are disabled, logging redaction is broader, and local plus CI secret scanning is permanent.
 
-The repository must **not** be made public yet. The current private remote `main` history contains Stripe catalogue identifiers introduced in one commit. They are not authentication credentials and cannot authorise access, but they violate the public-source deployment-metadata policy and would become permanently public if repository visibility changed now. A coordinated history rewrite and force-push is the final publication gate.
+The official GitHub refs have been replaced with a single sanitized root commit, the old release tag now points to that commit, the pre-hardening release has been quarantined as a draft, and a fresh clone contains no prior history. The repository must nevertheless **remain private** for one final GitHub-controlled cleanup: GitHub's Git Data API still serves the orphaned pre-rewrite commit by its known SHA. That commit contains production Stripe catalogue identifiers. They are not authentication credentials and cannot authorize access, but publishing while GitHub retains the object would violate the deployment-metadata policy. GitHub Support must purge the orphaned object and cached commit views before visibility changes.
 
 No committed authentication secret was found by Gitleaks across all locally reachable commits and refs. A GitHub credential exists only in an ignored local `.env`; it was not tracked, was not found in Git history, and is not present in the rebuilt Electron artifacts. It does not require rotation based on this audit.
 
@@ -23,13 +23,13 @@ Remediation upgraded direct dependencies and applied narrow pnpm overrides to pa
 
 ### HIGH
 
-#### PS-002 — production deployment identifiers in source — remediated in the working tree; history action required
+#### PS-002 — production deployment identifiers in source — remediated; GitHub object purge required
 
 The working tree contained a production WorkOS Client ID, four Stripe Price IDs, Stripe Product IDs, a portal configuration ID, a Cloudflare D1 database ID, a production billing return URL, and production-oriented Wrangler documentation/configuration.
 
 All current values were removed. The public Wrangler profile now contains empty deployment values and safe flags. Stripe Product and Price IDs are owner-supplied configuration. The D1 ID is written only to an ignored generated production overlay.
 
-The private remote history still contains Stripe catalogue identifiers in commit `e03feeae6ab02c5d7bb579249cd310754ba33aa0`. This is the only open publication blocker.
+An atomic, lease-protected rewrite replaced `main`, `v1.0.0`, and the temporary hardening branch with a sanitized root commit. The PR head now resolves to the same root and has no merge ref. A fresh clone exposes one commit and no production-shaped deployment identifiers across reachable refs. GitHub still retains the orphaned pre-rewrite commit in object storage and returns it through the authenticated Git Data API when addressed by its known SHA. Purging that unreachable object and cached views is the only open publication blocker.
 
 #### PS-003 — Worker configuration failed open toward commercial/provider behavior — remediated
 
@@ -44,6 +44,10 @@ The former validator treated committed WorkOS, Stripe, billing, and D1 values as
 - an ignored generated `.wrangler/deploy/wrangler.production.toml` overlay;
 - a manual, protected GitHub `production` Environment deployment workflow;
 - Cloudflare secret-name verification without reading values.
+
+#### PS-011 — pre-hardening release artifacts remained published — remediated
+
+The published `v1.0.0` release contained desktop artifacts produced before source maps and deployment metadata were removed from packaged output. The release was converted to a draft so its seven assets remain recoverable to the owner but cannot become public with the repository. A new public release must be built from the sanitized root using the hardened release workflow.
 
 ### MEDIUM
 
@@ -98,6 +102,10 @@ The release workflow can materialise an optional P12 certificate from a GitHub A
 - Hardened `.gitignore`, safe examples, deployment documentation, README guidance, and `SECURITY.md` incident response.
 - Added local/staged/CI public-source scanning, full-history Gitleaks on pull requests/main/release tags, and scanner/audit gates in manual and tagged packaging workflows.
 - Upgraded vulnerable direct dependencies and pinned patched transitive versions until upstream toolchains adopt them.
+- Created and verified an offline pre-rewrite Git bundle outside the repository.
+- Atomically replaced `main`, `v1.0.0`, and the PR branch with a lease-protected sanitized root commit.
+- Quarantined the pre-hardening `v1.0.0` binaries by converting the release to a draft.
+- Deleted 132 pre-rewrite GitHub Actions runs, which removed 17 active pre-hardening artifacts and their associated logs while retaining seven green sanitized-root runs.
 
 ## Credentials requiring rotation
 
@@ -153,55 +161,32 @@ gitleaks dir <isolated-publishable-file-snapshot> --max-archive-depth 3 --redact
 gitleaks dir apps/desktop/out --max-archive-depth 3 --redact=100
 ```
 
-Evidence at the completed audit point:
+Evidence from a fresh private-remote clone after the ref rewrite:
 
-- Gitleaks 8.30.1 history: 215 reachable commits scanned, approximately 442.87 MB, zero authentication-secret findings.
-- Publishable snapshot: 491 tracked/unignored files, approximately 2.96 MB, zero Gitleaks findings.
-- Root tests: 45 files / 223 tests passed after the final dependency refresh and configuration hardening.
+- Reachable history: one root commit; `main`, `v1.0.0`, the temporary branch, and PR head all resolved to the sanitized root at the rewrite checkpoint.
+- Reachable deployment-identifier scan: zero matching files.
+- Gitleaks 8.30.1: one reachable commit, approximately 2.95 MB, zero findings.
+- Root tests: 43 files / 210 tests passed.
 - Cortex Cloud focused tests: 7 files / 37 tests passed.
-- Electron E2E: 21/21 passed on the final full-suite rerun.
-- Typecheck passed across all 12 applicable workspace projects; lint completed with zero errors and one Fast Refresh warning in the renderer entrypoint.
-- Dependency audit: zero known vulnerabilities after remediation.
-- Worker dry run: passed with safe empty deployment variables and free-only/provider-disabled flags.
-- Worker startup profile: passed on Wrangler 4.120.1; active startup sample was 25.9 ms, including 4.3 ms garbage collection.
-- Electron production package and stable Windows installer: built successfully after the final dependency/configuration changes with zero source maps.
-- Packaged executable: passed an isolated-profile launch from outside the repository and cleanly terminated all four smoke processes.
-- Vite/ASAR exact local-value check: all three locally present credential/deployment values were absent across 46 production bundle/ASAR files.
-- Gitleaks generated artifacts: approximately 684.99 MB scanned with no findings in Vite output, unpacked package/ASAR, installer, NUPKG, ZIP, or nested release archives.
-- `pnpm security:scan`, staged scanning, ignore-boundary assertions, frozen install, build, make, and `git diff --check` all passed.
+- Electron E2E: 15/15 passed.
+- Typecheck passed across all 12 applicable workspace projects; lint completed with zero errors.
+- Dependency audit: zero known vulnerabilities.
+- Worker configuration, generated binding check, dry run, and startup analysis passed with safe empty deployment values and free-only/provider-disabled flags.
+- Electron production package and stable Windows installer built successfully with zero source maps.
+- Packaged executable launched with an isolated profile and produced four Electron processes; all smoke processes were terminated afterward.
+- Gitleaks scanned approximately 181.82 MB of packaged output, including nested archives, with zero findings.
+- Packaged-output deployment-identifier scan found zero matching files.
+- GitHub Actions on the sanitized root passed security analysis, pull-request checks, and the platform build matrix.
+- The old published release was converted to a draft; all pre-rewrite Actions runs/artifacts were removed; no forks exist.
 
-## Required history sanitisation before publication
+## Required GitHub object purge before publication
 
-Do this only after the remediated working tree has been reviewed, committed, and pushed to the still-private remote. Coordinate the force-push with every collaborator. Use a fresh mirror clone so local T3 checkpoint refs and ignored files cannot be published accidentally.
+Official refs and normal clone history are sanitized. Keep the repository private and open a GitHub Support sensitive-data-removal request asking GitHub to purge the orphaned pre-rewrite commit object and cached commit views. Provide Support with the repository name, the old commit SHA recorded in the private recovery bundle, and explain that the object contains production billing catalogue identifiers removed under a coordinated history rewrite.
 
-```powershell
-py -m pip install --user git-filter-repo
-winget install Gitleaks.Gitleaks
-
-$privateRepo = '<PRIVATE_GIT_URL>'
-$mirror = Join-Path $env:TEMP 'cortex-public-sanitized.git'
-$replacements = Join-Path $env:TEMP 'cortex-deployment-id-replacements.txt'
-
-git clone --mirror $privateRepo $mirror
-Set-Location $mirror
-
-$refs = git rev-list --all
-$ids = git grep -h -o -E '(price|prod|bpc)_[A-Za-z0-9]{12,}|client_[A-Za-z0-9]{20,}|https://[A-Za-z0-9.-]+\.workers\.dev' $refs 2>$null
-$ids | Sort-Object -Unique | ForEach-Object { "literal:$($_)==><removed-deployment-id>" } | Set-Content -LiteralPath $replacements
-
-git filter-repo --force --replace-text $replacements
-gitleaks git . --log-opts='--all' --redact=100 --no-banner
-
-$remaining = git grep -I -l -E '(price|prod|bpc)_[A-Za-z0-9]{12,}|client_[A-Za-z0-9]{20,}|database_id[[:space:]]*=[[:space:]]*"[0-9a-fA-F-]{36}"|https://[A-Za-z0-9.-]+\.workers\.dev' $(git rev-list --all) 2>$null
-if ($remaining) { throw 'Deployment identifiers remain in rewritten history.' }
-
-git push --mirror $privateRepo
-```
-
-After the force-push, re-clone from the private remote, rerun every command in the verification section, confirm GitHub Actions is green, and only then change repository visibility.
+After Support confirms removal, verify that the old SHA returns `404` through the Git Data API, repeat the fresh-clone history and Gitleaks checks, publish a newly rebuilt release rather than restoring the draft pre-hardening assets, and only then change repository visibility.
 
 ## Final verdict
 
 **NOT SAFE TO PUBLISH**
 
-Current source and generated artifacts satisfy the credential-isolation architecture, and no credential rotation is required. Publication is blocked only by the historical Stripe catalogue identifiers in the private remote. After the coordinated rewrite, fresh-clone verification, and green CI, the verdict becomes **SAFE TO PUBLISH** without additional source changes.
+Current source, reachable history, generated artifacts, licensing, and official GitHub refs satisfy the public-source architecture, and no credential rotation is required. Publication is blocked only by GitHub's retained orphaned pre-rewrite commit object. After GitHub Support purges that object and the owner repeats the short post-purge verification, the verdict becomes **SAFE TO PUBLISH** without additional source changes.

@@ -8,6 +8,7 @@ Run this checklist from a fresh clone of the exact commit that will become publi
 - [ ] Gitleaks scans all remote branches and tags with full history and zero findings.
 - [ ] No `.env`, `.dev.vars`, credential, certificate, signing, log, profiler, or local Cloudflare state file is tracked.
 - [ ] No Stripe Product/Price/Portal ID, WorkOS Client ID, D1/account/resource ID, deployed Worker URL, or private endpoint appears in current source or reachable history.
+- [ ] Every pre-rewrite commit SHA that GitHub previously retained returns `404` through the Git Data API; GitHub Support has confirmed cached commit/PR views were purged.
 - [ ] `.gitignore` still permits only safe example env files.
 
 ## Configuration boundaries
@@ -30,6 +31,8 @@ Run this checklist from a fresh clone of the exact commit that will become publi
 - [ ] Gitleaks scans Vite output, `app.asar`, unpacked Electron output, installer, NUPKG, and ZIP archives with zero findings.
 - [ ] Exact local secret/deployment values are absent from compiled bundles and `app.asar`.
 - [ ] Signed release artifacts are used when signing secrets are configured; checksums and SBOM are published.
+- [ ] No pre-hardening release or Actions artifact is public; release assets were rebuilt from the exact sanitized commit.
+- [ ] Historical workflow runs and logs do not expose removed configuration or downloadable pre-hardening packages.
 
 ## External production checks
 
@@ -39,3 +42,4 @@ Run this checklist from a fresh clone of the exact commit that will become publi
 - [ ] D1 migrations are applied to the intended database through the generated production overlay.
 - [ ] A clean-machine Windows install/update/uninstall smoke test passes.
 - [ ] `docs/security/PUBLIC_SOURCE_AUDIT.md` has no open finding and says `SAFE TO PUBLISH`.
+- [ ] Repository visibility remains private until every item above is complete.
