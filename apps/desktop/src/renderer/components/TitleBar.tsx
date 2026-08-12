@@ -44,6 +44,43 @@ function CloseIcon(): React.JSX.Element {
   );
 }
 
+export function WindowControls(): React.JSX.Element {
+  return (
+    <div className="window-controls">
+      <Tooltip content="Minimize" side="bottom" delayMs={420}>
+        <button
+          type="button"
+          className="window-control"
+          aria-label="Minimize window"
+          onClick={() => act('minimize')}
+        >
+          <MinimizeIcon />
+        </button>
+      </Tooltip>
+      <Tooltip content="Maximize" side="bottom" delayMs={420}>
+        <button
+          type="button"
+          className="window-control"
+          aria-label="Maximize window"
+          onClick={() => act('maximize')}
+        >
+          <MaximizeIcon />
+        </button>
+      </Tooltip>
+      <Tooltip content="Close" side="bottom" delayMs={420}>
+        <button
+          type="button"
+          className="window-control window-close"
+          aria-label="Close window"
+          onClick={() => act('close')}
+        >
+          <CloseIcon />
+        </button>
+      </Tooltip>
+    </div>
+  );
+}
+
 export function TitleBar(): React.JSX.Element {
   const workspace = useWorkspaceStore((state) => state.workspace);
   const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
@@ -173,38 +210,7 @@ export function TitleBar(): React.JSX.Element {
           </>
         ) : null}
       </div>
-      <div className="window-controls">
-        <Tooltip content="Minimize" side="bottom" delayMs={420}>
-          <button
-            type="button"
-            className="window-control"
-            aria-label="Minimize window"
-            onClick={() => act('minimize')}
-          >
-            <MinimizeIcon />
-          </button>
-        </Tooltip>
-        <Tooltip content="Maximize" side="bottom" delayMs={420}>
-          <button
-            type="button"
-            className="window-control"
-            aria-label="Maximize window"
-            onClick={() => act('maximize')}
-          >
-            <MaximizeIcon />
-          </button>
-        </Tooltip>
-        <Tooltip content="Close" side="bottom" delayMs={420}>
-          <button
-            type="button"
-            className="window-control window-close"
-            aria-label="Close window"
-            onClick={() => act('close')}
-          >
-            <CloseIcon />
-          </button>
-        </Tooltip>
-      </div>
+      <WindowControls />
     </header>
   );
 }

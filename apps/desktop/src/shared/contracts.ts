@@ -105,6 +105,7 @@ export const channels = {
   projectsRecent: 'projects:recent',
   projectsRecentDetails: 'projects:recent-details',
   projectsOpenFolder: 'projects:open-folder',
+  projectsOpenDropped: 'projects:open-dropped',
   projectsImport: 'projects:import',
   projectsRemoveRecent: 'projects:remove-recent',
   projectsReveal: 'projects:reveal',
@@ -148,6 +149,7 @@ export const channels = {
   reportsStatus: 'reports:status',
   reportsSubmit: 'reports:submit',
   reportsRecordClientError: 'reports:record-client-error',
+  systemColorScheme: 'system:color-scheme',
   systemWindow: 'system:window',
   systemExternal: 'system:external',
 } as const;
@@ -156,6 +158,10 @@ export const channels = {
 export const updatesChangedEvent = 'updates:changed' as const;
 export const aiStreamEvent = 'ai:stream' as const;
 export const accountChangedEvent = 'account:changed' as const;
+export const systemColorSchemeChanged = 'system:color-scheme-changed' as const;
+
+export const systemColorModeSchema = z.enum(['light', 'dark']);
+export type SystemColorMode = z.infer<typeof systemColorModeSchema>;
 
 export const accountStatusSchema = z
   .object({
@@ -632,6 +638,10 @@ export const ipcDefinitions = {
     request: z.object({ root: z.string().min(1).max(4096) }).strict(),
     response: result(workspaceSchema),
   },
+  [channels.projectsOpenDropped]: {
+    request: z.object({ root: z.string().min(1).max(4096) }).strict(),
+    response: result(workspaceSchema),
+  },
   [channels.projectsImport]: { request: empty, response: result(workspaceSchema.nullable()) },
   [channels.projectsRemoveRecent]: {
     request: z.object({ root: z.string().min(1).max(4096) }).strict(),
@@ -826,6 +836,7 @@ export const ipcDefinitions = {
       .strict(),
     response: result(z.boolean()),
   },
+  [channels.systemColorScheme]: { request: empty, response: result(systemColorModeSchema) },
   [channels.systemWindow]: {
     request: z.object({ action: z.enum(['minimize', 'maximize', 'close']) }).strict(),
     response: result(z.boolean()),
@@ -850,6 +861,7 @@ export interface CortexApi {
     openFolder(
       input: IpcRequest<'projects:open-folder'>,
     ): Promise<IpcResponse<'projects:open-folder'>>;
+    openDropped(file: File): Promise<IpcResponse<'projects:open-dropped'>>;
     import(): Promise<IpcResponse<'projects:import'>>;
     removeRecent(
       input: IpcRequest<'projects:remove-recent'>,
@@ -928,6 +940,8 @@ export interface CortexApi {
     ): Promise<IpcResponse<'reports:record-client-error'>>;
   };
   system: {
+    colorScheme(): Promise<IpcResponse<'system:color-scheme'>>;
+    onColorSchemeChanged(listener: (mode: SystemColorMode) => void): () => void;
     window(input: IpcRequest<'system:window'>): Promise<IpcResponse<'system:window'>>;
     openExternal(input: IpcRequest<'system:external'>): Promise<IpcResponse<'system:external'>>;
   };

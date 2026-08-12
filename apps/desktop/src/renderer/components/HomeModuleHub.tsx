@@ -601,9 +601,9 @@ export function HomeModuleHub(): React.JSX.Element {
     }
   };
 
-  const openDropped = async (root: string) => {
+  const openDropped = async (file: File) => {
     try {
-      setWorkspace(unwrap(await window.cortex.projects.openFolder({ root })));
+      setWorkspace(unwrap(await window.cortex.projects.openDropped(file)));
       void recents.refetch();
       refreshActivities();
     } catch (error) {
@@ -731,12 +731,11 @@ export function HomeModuleHub(): React.JSX.Element {
     event.preventDefault();
     setDragDepth(0);
     const file = event.dataTransfer.files[0];
-    const filePath = file ? (file as File & { path?: string }).path : undefined;
-    if (!filePath) {
+    if (!file) {
       toast.error('Drop a folder from your file system.');
       return;
     }
-    void openDropped(filePath);
+    void openDropped(file);
   };
 
   const openIntroduction = () => {

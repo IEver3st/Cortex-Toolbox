@@ -185,7 +185,100 @@ describe('script analysis', () => {
         'end)',
       ].join('\n'),
     );
-    expect(file.warnings).toContain('Continuous loop has no visible Wait near line 2');
-    expect(file.warnings).toContain('Network event is emitted from a continuous loop near line 2');
+    expect(file.warnings).toContain('Continuous loop has no visible yield near line 2');
+    expect(file.warnings).toContain('Network event is emitted from an unyielded loop near line 2');
+  });
+
+  it('flags the audited conditional network loop without flagging yielding or finite loops', () => {
+    const hot = analyzeScript(
+      'client/pending.lua',
+      [
+        'CreateThread(function()',
+        '  while pending do',
+        "    TriggerServerEvent('queue:pending')",
+        '  end',
+        'end)',
+      ].join('\n'),
+    );
+    expect(hot.warnings).toContain(
+      'Conditional loop may execute continuously without yielding near line 2',
+    );
+    expect(hot.warnings).toContain('Network event is emitted from an unyielded loop near line 2');
+
+    const yielding = analyzeScript(
+      'client/yielding.lua',
+      ['while pending do', '  Wait(250)', "  TriggerServerEvent('queue:pending')", 'end'].join(
+        '\n',
+      ),
+    );
+    expect(yielding.warnings.filter((warning) => /loop|Network event/.test(warning))).toEqual([]);
+
+    const finite = analyzeScript(
+      'client/finite.lua',
+      ['local index = 1', 'while index <= #items do', '  index = index + 1', 'end'].join('\n'),
+    );
+    expect(finite.warnings.filter((warning) => /loop|Network event/.test(warning))).toEqual([]);
+  });
+
+  it('ignores API-shaped text in comments and ordinary strings', () => {
+    const lua = analyzeScript(
+      'client/comment-only.lua',
+      [
+        "-- RegisterNetEvent('audit:ghost')",
+        '--[[',
+        "TriggerServerEvent('audit:ghost-out')",
+        "exports('ghostExport', function() end)",
+        ']]',
+        'local note = "RegisterCommand(\'ghost-command\', function() end)"',
+      ].join('\n'),
+    );
+    const javascript = analyzeScript(
+      'client/comment-only.js',
+      [
+        "// onNet('audit:ghost-js', () => {})",
+        '/*',
+        "emitNet('audit:ghost-js-out')",
+        'function ghostFunction() {}',
+        '*/',
+        'const note = "RegisterNetEvent(\'ghost-string\')";',
+      ].join('\n'),
+    );
+    expect(lua.symbols).toEqual([]);
+    expect(lua.warnings).toEqual([]);
+    expect(javascript.symbols).toEqual([]);
+    expect(javascript.warnings).toEqual([]);
+  });
+
+  it('keeps executable-code masking aligned around Unicode surrogate pairs', () => {
+    const inert = analyzeScript(
+      'client/unicode-string.js',
+      'const note = "😀 setInterval(() => {}, 0)";',
+    );
+    const executable = analyzeScript(
+      'client/unicode-code.js',
+      'const icon = "😀"; setInterval(() => {}, 0);',
+    );
+
+    expect(inert.warnings).toEqual([]);
+    expect(executable.warnings).toContain(
+      'Very short setInterval detected; verify that this work must run continuously.',
+    );
+  });
+
+  it('does not mistake a Lua table field for a loop-condition mutation', () => {
+    const file = analyzeScript(
+      'client/table-field.lua',
+      [
+        'local active = true',
+        'while active do',
+        "  TriggerServerEvent('audit:storm')",
+        '  print(json.encode({ active = active }))',
+        'end',
+      ].join('\n'),
+    );
+    expect(file.warnings).toContain(
+      'Conditional loop may execute continuously without yielding near line 2',
+    );
+    expect(file.warnings).toContain('Network event is emitted from an unyielded loop near line 2');
   });
 });

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 // Sandboxed preload cannot load Node builtins. Import pure Result helpers only —
 // the @cortex/core barrel re-exports fs/path/lockfile modules that crash preload.
 import { fail, fromUnknown } from '@cortex/core/result';
@@ -7,7 +7,9 @@ import {
   ipcDefinitions,
   aiStreamEvent,
   accountChangedEvent,
+  systemColorSchemeChanged,
   accountStatusSchema,
+  systemColorModeSchema,
   updateStatusSchema,
   updatesChangedEvent,
   type Channel,
@@ -53,6 +55,8 @@ const api: CortexApi = {
     recent: () => invoke(channels.projectsRecent, {}),
     recentDetails: () => invoke(channels.projectsRecentDetails, {}),
     openFolder: (input) => invoke(channels.projectsOpenFolder, input),
+    openDropped: (file) =>
+      invoke(channels.projectsOpenDropped, { root: webUtils.getPathForFile(file) }),
     import: () => invoke(channels.projectsImport, {}),
     removeRecent: (input) => invoke(channels.projectsRemoveRecent, input),
     reveal: (input) => invoke(channels.projectsReveal, input),
@@ -144,6 +148,15 @@ const api: CortexApi = {
     recordClientError: (input) => invoke(channels.reportsRecordClientError, input),
   },
   system: {
+    colorScheme: () => invoke(channels.systemColorScheme, {}),
+    onColorSchemeChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, raw: unknown) => {
+        const parsed = systemColorModeSchema.safeParse(raw);
+        if (parsed.success) listener(parsed.data);
+      };
+      ipcRenderer.on(systemColorSchemeChanged, handler);
+      return () => ipcRenderer.removeListener(systemColorSchemeChanged, handler);
+    },
     window: (input) => invoke(channels.systemWindow, input),
     openExternal: (input) => invoke(channels.systemExternal, input),
   },

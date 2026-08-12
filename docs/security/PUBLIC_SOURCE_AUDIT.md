@@ -185,6 +185,27 @@ Evidence from a fresh private-remote clone after the ref rewrite:
 
 The replacement repository must receive only sanitized `main`. Do not push the local recovery bundle, legacy branches, old tags, or refs from older clones. Reconfigure required GitHub variables, secrets, environments, webhooks, and protection rules manually because secret values and repository-scoped deployment configuration were intentionally not copied. Publish only newly built release artifacts from the replacement repository's reviewed `main`.
 
+## Release automation hardening
+
+The launch-readiness workflow now uses an explicit versioned dispatch from protected `main` rather
+than publishing directly from a maintainer machine. It validates version/changelog parity, executes
+the complete Linux and Windows gate set, signs both packaged application binaries and the Squirrel
+installer for stable releases, publishes checksums and a CycloneDX SBOM, scans nested release
+archives, and exercises install/launch/uninstall on an ephemeral Windows runner.
+
+GitHub receives a private draft first. The workflow downloads that hosted asset set and verifies it
+again before publication; a failed verification removes the unpublished draft and generated tag.
+Stable releases cannot be created without both signing secrets in the protected `release`
+Environment. The owner helper `scripts/configure-release.ps1` uploads those values without adding
+them to source or shell arguments, and `pnpm release -- <version> stable` dispatches and watches the
+entire workflow.
+
+The 2026-08-12 GitHub advisory refresh also classified the transitive `extract-zip@2.0.1` build
+dependency as vulnerable to escaping symlink targets, with no upstream patched release. Cortex
+applies a pnpm-tracked containment patch before Electron Packager can use it and carries an
+adversarial archive regression test. The single GHSA audit exception is scoped to that exact
+patched dependency; all other high-severity advisories remain blocking.
+
 ## Final verdict
 
 **SAFE TO PUBLISH**

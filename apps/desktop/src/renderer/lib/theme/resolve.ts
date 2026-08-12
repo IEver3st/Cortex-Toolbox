@@ -8,10 +8,11 @@ import {
 } from '../../../shared/theme-schema';
 import { builtinPaletteMeta, resolveBuiltinTokens } from './builtins';
 import { applyContrastProtection, applyInterfaceContrast } from './contrast';
+import { getSystemColorMode } from './system-color-mode';
 
 export function resolvedColorMode(colorMode: Preferences['colorMode']): 'light' | 'dark' {
   if (colorMode !== 'system') return colorMode;
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return getSystemColorMode();
 }
 
 function mergeTokens(base: FullThemeTokens, overrides?: TokenOverrides): FullThemeTokens {

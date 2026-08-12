@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { analyzeLuaWhileLoops } from './lua-loop-analysis';
 
 interface ProbeScriptSymbol {
   name: string;
@@ -174,24 +175,37 @@ const WARNING_RULES: {
   inferred?: boolean;
 }[] = [
   {
-    pattern: /Continuous loop has no visible Wait near line (\d+)/,
+    pattern: /Continuous loop has no visible yield near line (\d+)/,
     ruleId: 'probe/performance/busy-loop-no-yield',
     severity: 'high',
     category: 'performance',
     confidence: 'high',
     title: 'Busy loop may run continuously',
-    impact: 'Cortex found a while true loop whose visible body contains no Wait/Citizen.Wait call.',
+    impact: 'Cortex found an unconditional loop whose visible body contains no scheduler yield.',
     remediation:
       'Add a bounded Wait, replace polling with an event, or document why the loop must be tight.',
   },
   {
-    pattern: /Network event is emitted from a continuous loop near line (\d+)/,
+    pattern: /Conditional loop may execute continuously without yielding near line (\d+)/,
+    ruleId: 'probe/performance/busy-loop-no-yield',
+    severity: 'medium',
+    category: 'performance',
+    confidence: 'medium',
+    title: 'Conditional loop may run continuously',
+    impact:
+      'Cortex found a conditional loop with work in its body but no visible yield, condition mutation, or exit.',
+    remediation:
+      'Add a bounded Wait, mutate the loop condition in the body, or replace polling with an event.',
+    inferred: true,
+  },
+  {
+    pattern: /Network event is emitted from an unyielded loop near line (\d+)/,
     ruleId: 'probe/performance/network-in-loop',
     severity: 'high',
     category: 'performance',
     confidence: 'high',
     title: 'Network traffic inside a perpetual loop',
-    impact: 'Cortex found a Trigger*Event or emit call inside a continuous loop body.',
+    impact: 'Cortex found a Trigger*Event or emit call inside a loop with no visible yield.',
     remediation:
       'Debounce emissions, move work behind server authority, or trigger from discrete state changes.',
   },
@@ -304,68 +318,64 @@ function detectLoopPatterns(
   findings: ProbeFinding[],
   seen: Set<string>,
 ): void {
-  const lines = source.replaceAll('\r\n', '\n').split('\n');
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!/^\s*while\s+true\s+do\b/.test(lines[index] ?? '')) continue;
-    const body = lines.slice(index, Math.min(lines.length, index + 120)).join('\n');
-    const nearestEnd = body.search(/^\s*end\s*$/m);
-    const loopBody = nearestEnd >= 0 ? body.slice(0, nearestEnd) : body;
-    const startLine = index + 1;
+  const loops = analyzeLuaWhileLoops(source);
+  for (const loop of loops) {
+    const loopLabel = loop.unconditional ? 'while true loop' : `while ${loop.condition} loop`;
 
-    if (/\b(?:Citizen\.)?Wait\s*\(\s*(?:0|1)\s*\)/.test(loopBody)) {
+    if (loop.hasShortWait) {
       pushFinding(findings, seen, {
         ruleId: 'probe/performance/short-wait-loop',
         severity: 'medium',
         category: 'performance',
         confidence: 'medium',
         title: PROBE_RULE_META['probe/performance/short-wait-loop']!.title,
-        explanation: `Cortex found Wait(0) or Wait(1) inside a while true loop near line ${startLine}.`,
+        explanation: `Cortex found Wait(0) or Wait(1) inside a repeated loop near line ${loop.startLine}.`,
         impact: PROBE_RULE_META['probe/performance/short-wait-loop']!.impact,
         remediation: 'Increase the wait interval or replace polling with discrete events.',
         file: file.relativePath,
-        startLine,
-        endLine: startLine,
-        evidence: [`while true loop at line ${startLine}`, 'Wait(0) or Wait(1) in loop body'],
+        startLine: loop.startLine,
+        endLine: loop.endLine,
+        evidence: [`${loopLabel} at line ${loop.startLine}`, 'Wait(0) or Wait(1) in loop body'],
         inferred: true,
       });
     }
 
-    if (/\bjson\.(?:encode|decode)\b/.test(loopBody)) {
+    if (loop.mayRunContinuously && loop.hasJsonWork) {
       pushFinding(findings, seen, {
         ruleId: 'probe/performance/json-in-loop',
         severity: 'medium',
         category: 'performance',
         confidence: 'high',
         title: PROBE_RULE_META['probe/performance/json-in-loop']!.title,
-        explanation: `Cortex found json.encode or json.decode inside a while true loop near line ${startLine}.`,
+        explanation: `Cortex found json.encode or json.decode inside a hot loop near line ${loop.startLine}.`,
         impact: PROBE_RULE_META['probe/performance/json-in-loop']!.impact,
         remediation: 'Move serialization outside the loop or cache encoded payloads.',
         file: file.relativePath,
-        startLine,
-        endLine: startLine,
-        evidence: [`while true loop at line ${startLine}`, 'json.encode/decode in loop body'],
+        startLine: loop.startLine,
+        endLine: loop.endLine,
+        evidence: [`${loopLabel} at line ${loop.startLine}`, 'json.encode/decode in loop body'],
       });
     }
 
-    if (/\bprint\s*\(/.test(loopBody)) {
+    if (loop.mayRunContinuously && loop.hasDebugPrint) {
       pushFinding(findings, seen, {
         ruleId: 'probe/performance/debug-in-loop',
         severity: 'low',
         category: 'performance',
         confidence: 'high',
         title: PROBE_RULE_META['probe/performance/debug-in-loop']!.title,
-        explanation: `Cortex found print() inside a while true loop near line ${startLine}.`,
+        explanation: `Cortex found print() inside a hot loop near line ${loop.startLine}.`,
         impact: PROBE_RULE_META['probe/performance/debug-in-loop']!.impact,
         remediation: 'Remove debug prints from hot loops or guard them behind a debug flag.',
         file: file.relativePath,
-        startLine,
-        endLine: startLine,
-        evidence: [`while true loop at line ${startLine}`, 'print() in loop body'],
+        startLine: loop.startLine,
+        endLine: loop.endLine,
+        evidence: [`${loopLabel} at line ${loop.startLine}`, 'print() in loop body'],
       });
     }
   }
 
-  const loopCount = lines.filter((line) => /^\s*while\s+true\s+do\b/.test(line)).length;
+  const loopCount = loops.filter((loop) => loop.mayRunContinuously || loop.hasShortWait).length;
   if (loopCount >= 2) {
     pushFinding(findings, seen, {
       ruleId: 'probe/reliability/duplicate-polling',
@@ -373,13 +383,13 @@ function detectLoopPatterns(
       category: 'reliability',
       confidence: 'medium',
       title: PROBE_RULE_META['probe/reliability/duplicate-polling']!.title,
-      explanation: `Cortex found ${loopCount} while true loops in this file.`,
+      explanation: `Cortex found ${loopCount} repeated polling loops in this file.`,
       impact: PROBE_RULE_META['probe/reliability/duplicate-polling']!.impact,
       remediation: 'Consolidate polling into one loop or convert repeated checks to events.',
       file: file.relativePath,
       startLine: 1,
-      endLine: Math.max(1, lines.length),
-      evidence: [`${loopCount} while true loops detected`],
+      endLine: Math.max(1, source.replaceAll('\r\n', '\n').split('\n').length),
+      evidence: [`${loopCount} polling loops detected`],
       inferred: true,
     });
   }

@@ -24,6 +24,51 @@ describe('probe findings', () => {
     );
   });
 
+  it('reports the audited conditional unyielded loop independently of event-safety findings', () => {
+    const source = [
+      'CreateThread(function()',
+      '  while pending do',
+      "    TriggerServerEvent('audit:pending')",
+      '  end',
+      'end)',
+    ].join('\n');
+    const file = analyzeScript('client/audit-pending.lua', source);
+    const findings = buildProbeFindings(buildResourceAnalysis([file]), {
+      sources: { 'client/audit-pending.lua': source },
+    });
+    expect(
+      findings.some((finding) => finding.ruleId === 'probe/performance/busy-loop-no-yield'),
+    ).toBe(true);
+    expect(findings.some((finding) => finding.ruleId === 'probe/performance/network-in-loop')).toBe(
+      true,
+    );
+    expect(findings.filter((finding) => finding.category === 'performance')).toHaveLength(2);
+  });
+
+  it('does not report busy loops for a proper yield or an ordinary finite condition', () => {
+    const yieldingSource = ['while pending do', '  Citizen.Wait(100)', '  poll()', 'end'].join(
+      '\n',
+    );
+    const finiteSource = [
+      'local index = 1',
+      'while index <= #items do',
+      '  consume(items[index])',
+      '  index = index + 1',
+      'end',
+    ].join('\n');
+    const yielding = analyzeScript('client/yielding.lua', yieldingSource);
+    const finite = analyzeScript('client/finite.lua', finiteSource);
+    const findings = buildProbeFindings(buildResourceAnalysis([yielding, finite]), {
+      sources: {
+        'client/yielding.lua': yieldingSource,
+        'client/finite.lua': finiteSource,
+      },
+    });
+    expect(
+      findings.some((finding) => finding.ruleId === 'probe/performance/busy-loop-no-yield'),
+    ).toBe(false);
+  });
+
   it('re-exports probeFindingFingerprint from the package barrel', () => {
     expect(
       probeFindingFingerprint({

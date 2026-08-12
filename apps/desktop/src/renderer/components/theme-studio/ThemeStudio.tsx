@@ -26,9 +26,9 @@ import {
   paletteDisplayName,
   resolveActivePaletteId,
   resolveBasePaletteId,
-  resolvedColorMode,
   resolveThemeTokens,
 } from '../../lib/theme/resolve';
+import { useSystemColorMode } from '../../lib/theme/system-color-mode';
 import { Select } from '../Select';
 import { Toggle } from '../UiPrimitives';
 import { ColorTokenField } from './ColorTokenField';
@@ -124,7 +124,8 @@ export function ThemeStudio({
   const [saveName, setSaveName] = useState('');
   const [fontAvailability, setFontAvailability] = useState<Map<string, boolean>>(new Map());
   const importRef = useRef<HTMLInputElement>(null);
-  const previewModeResolved = resolvedColorMode(draft.colorMode);
+  const systemColorMode = useSystemColorMode();
+  const previewModeResolved = draft.colorMode === 'system' ? systemColorMode : draft.colorMode;
   const tokens = resolveThemeTokens(draft, previewModeResolved);
   const basePaletteId = resolveBasePaletteId(draft);
   const customized = isCustomizedPalette(draft);

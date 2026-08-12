@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { minimatch } from 'minimatch';
 import type { ResourceFile } from './tree';
+import type { MissingManifestReference } from './audit';
 
 export interface PackageEntry {
   relativePath: string;
@@ -16,6 +18,7 @@ export interface ReleaseGateInput {
   hasParsedManifest: boolean;
   hasFxVersion: boolean;
   hasGame: boolean;
+  missingManifestReferences: MissingManifestReference[];
 }
 
 export interface ReleaseGateResult {
@@ -72,6 +75,37 @@ function normalizeEntryPath(relativePath: string): string {
   return relativePath.replaceAll('\\', '/').replace(/^\.\/+/, '');
 }
 
+function safeEntryPath(
+  root: string,
+  relativePath: string,
+): { relativePath: string; target: string } {
+  if (relativePath.includes('\0')) throw new Error('Package paths cannot contain null bytes.');
+  const normalized = normalizeEntryPath(relativePath);
+  const segments = normalized.split('/');
+  if (
+    !normalized ||
+    path.posix.isAbsolute(normalized) ||
+    /^[A-Za-z]:\//.test(normalized) ||
+    segments.some((segment) => segment === '..' || segment === '.' || segment === '')
+  ) {
+    throw new Error(`Unsafe package entry path: ${relativePath}`);
+  }
+  const safeRoot = path.resolve(root);
+  const target = path.resolve(safeRoot, ...segments);
+  const fromRoot = path.relative(safeRoot, target);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${path.sep}`) || path.isAbsolute(fromRoot)) {
+    throw new Error(`Package entry resolves outside the workspace: ${relativePath}`);
+  }
+  return { relativePath: normalized, target };
+}
+
+function assertRealTargetWithinRoot(rootRealPath: string, targetRealPath: string): void {
+  const fromRoot = path.relative(rootRealPath, targetRealPath);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${path.sep}`) || path.isAbsolute(fromRoot)) {
+    throw new Error('Package entries cannot escape the workspace through a symbolic link.');
+  }
+}
+
 function entryBasename(relativePath: string): string {
   const normalized = normalizeEntryPath(relativePath);
   const slash = normalized.lastIndexOf('/');
@@ -110,6 +144,12 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateResult 
   if (input.hasParsedManifest) {
     if (!input.hasFxVersion) blockers.push('The manifest does not declare fx_version.');
     if (!input.hasGame) blockers.push('The manifest does not declare a target game.');
+  }
+
+  for (const reference of input.missingManifestReferences) {
+    blockers.push(
+      `Manifest ${reference.kind} reference "${reference.value}" on line ${reference.line} is missing from the package.`,
+    );
   }
 
   if (input.entries.length === 0) blockers.push('Package entries are empty.');
@@ -170,25 +210,33 @@ export async function createPackagePlan(
   includes: string[],
   excludes: string[],
 ): Promise<PackageEntry[]> {
-  const selected = files.filter(
-    (file) =>
-      (includes.length === 0 || includes.some((glob) => minimatch(file.relativePath, glob))) &&
-      !excludes.some((glob) => minimatch(file.relativePath, glob)),
-  );
+  const rootRealPath = await realpath(root);
+  const selected = files
+    .map((file) => safeEntryPath(rootRealPath, file.relativePath))
+    .filter(
+      (safe) =>
+        (includes.length === 0 || includes.some((glob) => minimatch(safe.relativePath, glob))) &&
+        !excludes.some((glob) => minimatch(safe.relativePath, glob)),
+    );
   const archiveNames = new Map<string, string>();
-  for (const file of selected) {
-    const key = file.relativePath.normalize('NFC').toLocaleLowerCase('en-US');
+  for (const safe of selected) {
+    const key = safe.relativePath.normalize('NFC').toLocaleLowerCase('en-US');
     const existing = archiveNames.get(key);
-    if (existing && existing !== file.relativePath)
+    if (existing && existing !== safe.relativePath)
       throw new Error(
-        `Archive collision: ${existing} and ${file.relativePath} resolve to the same portable ZIP path.`,
+        `Archive collision: ${existing} and ${safe.relativePath} resolve to the same portable ZIP path.`,
       );
-    archiveNames.set(key, file.relativePath);
+    archiveNames.set(key, safe.relativePath);
   }
-  return mapConcurrent(selected, 8, async (file) => {
-    const digest = await hashFile(path.join(root, file.relativePath));
+  return mapConcurrent(selected, 8, async (safe) => {
+    const targetRealPath = await realpath(safe.target);
+    assertRealTargetWithinRoot(rootRealPath, targetRealPath);
+    const info = await stat(targetRealPath);
+    if (!info.isFile())
+      throw new Error(`Package entry is not a regular file: ${safe.relativePath}`);
+    const digest = await hashFile(targetRealPath);
     return {
-      relativePath: file.relativePath,
+      relativePath: safe.relativePath,
       ...digest,
     };
   });

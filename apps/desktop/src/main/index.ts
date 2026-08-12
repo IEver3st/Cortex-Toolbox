@@ -1,7 +1,9 @@
 import path from 'node:path';
-import { app, BrowserWindow, nativeImage, session } from 'electron';
+import { app, BrowserWindow, nativeImage, nativeTheme, session } from 'electron';
+import squirrelStartup from 'electron-squirrel-startup';
 import pino from 'pino';
 import { brandingForChannel, iconBaseNameForReleaseBranch } from '../shared/branding';
+import { systemColorSchemeChanged, type SystemColorMode } from '../shared/contracts';
 import { loadEnv } from './config/env';
 import { DiagnosticsService } from './diagnostics-service';
 import { registerIpc, readPreferences } from './ipc';
@@ -37,7 +39,7 @@ const csp = isDevelopment
 let primaryWindow: BrowserWindow | null = null;
 let pendingAuthUrl: string | null = findAuthUrl(process.argv);
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const hasSingleInstanceLock = !squirrelStartup && app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
 } else if (process.defaultApp) {
@@ -50,6 +52,17 @@ if (!hasSingleInstanceLock) {
 
 function findAuthUrl(argv: string[]): string | null {
   return argv.find((argument) => argument.startsWith(`${CORTEX_AUTH_PROTOCOL}://`)) ?? null;
+}
+
+function currentSystemColorMode(): SystemColorMode {
+  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+}
+
+function broadcastSystemColorScheme(): void {
+  const mode = currentSystemColorMode();
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(systemColorSchemeChanged, mode);
+  }
 }
 
 async function handleAuthUrl(url: string): Promise<void> {
@@ -144,6 +157,7 @@ if (hasSingleInstanceLock)
           responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] },
         }),
       );
+      nativeTheme.on('updated', broadcastSystemColorScheme);
       registerIpc(env, diagnostics, cortexAuth);
       createWindow();
       if (pendingAuthUrl) {

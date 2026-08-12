@@ -6,9 +6,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { Toaster } from 'sonner';
 import { LazyMotion, domAnimation } from 'motion/react';
 import { App } from './App';
+import { CortexToaster } from './components/CortexToaster';
 import './styles.css';
 import './styles-theme-studio.css';
 
@@ -31,7 +31,7 @@ createRoot(root).render(
         <MemoryRouter>
           <App />
         </MemoryRouter>
-        <Toaster theme="dark" position="bottom-right" />
+        <CortexToaster />
       </QueryClientProvider>
     </LazyMotion>
   </React.StrictMode>,

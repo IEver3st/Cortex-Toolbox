@@ -3,7 +3,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import fg from 'fast-glob';
-import { minimatch } from 'minimatch';
 import { assertWithinRoot, normalizeRelative } from '@cortex/core';
 import {
   analyzeScript,
@@ -11,7 +10,11 @@ import {
   type ResourceAnalysis,
 } from '@cortex/script-analysis';
 import { pluginManifestSchema, type PluginManifest } from '@cortex/plugin-sdk';
-import { parseManifest, type ResourceFile } from '@cortex/resource-parser';
+import {
+  findMissingManifestReferences,
+  parseManifest,
+  type ResourceFile,
+} from '@cortex/resource-parser';
 
 const execFileAsync = promisify(execFile);
 const scriptExtensions = new Set(['.lua', '.js', '.mjs', '.cjs', '.ts', '.tsx']);
@@ -58,25 +61,6 @@ function deriveKind(input: {
   if (input.scripts >= assets * 2) return 'script';
   if (assets >= input.scripts * 2) return 'asset';
   return 'mixed';
-}
-
-function hasGlob(pattern: string): boolean {
-  return /[*?[{]/.test(pattern);
-}
-
-function pathExistsInWorkspace(declared: string, files: ResourceFile[]): boolean {
-  const normalized = declared.replaceAll('\\', '/').replace(/^\.\//, '');
-  if (!normalized) return true;
-  if (!hasGlob(normalized)) {
-    const lower = normalized.toLowerCase();
-    return files.some((file) => file.relativePath.replaceAll('\\', '/').toLowerCase() === lower);
-  }
-  return files.some((file) =>
-    minimatch(file.relativePath.replaceAll('\\', '/'), normalized, {
-      nocase: true,
-      dot: true,
-    }),
-  );
 }
 
 export interface ManifestCandidate {
@@ -237,17 +221,9 @@ async function buildManifestProfile(
       'utf8',
     );
     const parsed = parseManifest(source);
-    const declared = [
-      ...parsed.clientScripts,
-      ...parsed.serverScripts,
-      ...parsed.sharedScripts,
-      ...parsed.files,
-      ...parsed.dataFiles.map((entry) => entry.path),
-      ...(parsed.uiPage ? [parsed.uiPage] : []),
-    ];
-    const allMissing = declared
-      .map((entry) => entry.value)
-      .filter((value) => !pathExistsInWorkspace(value, files));
+    const allMissing = findMissingManifestReferences(files, parsed).map(
+      (reference) => reference.value,
+    );
     const missing = allMissing.slice(0, 12);
 
     return {

@@ -2,6 +2,11 @@
 
 Run this checklist from a fresh clone of the exact commit that will become public.
 
+The `Release` GitHub workflow enforces the source, CI, artifact, signing, checksum, SBOM, and
+clean-runner installer gates below. It creates a private draft first and publishes it only after the
+downloaded draft assets pass verification. Maintainers configure signing once with
+`scripts/configure-release.ps1`, then dispatch with `pnpm release -- <version> <stable|beta>`.
+
 ## Source and history
 
 - [ ] `pnpm security:scan` passes.
@@ -42,4 +47,14 @@ Run this checklist from a fresh clone of the exact commit that will become publi
 - [ ] D1 migrations are applied to the intended database through the generated production overlay.
 - [ ] A clean-machine Windows install/update/uninstall smoke test passes.
 - [ ] `docs/security/PUBLIC_SOURCE_AUDIT.md` has no open finding and says `SAFE TO PUBLISH`.
+
+## Owner-only inputs
+
+- [ ] The GitHub `release` Environment contains `CORTEX_WINDOWS_CERTIFICATE_BASE64` and
+      `CORTEX_WINDOWS_CERTIFICATE_PASSWORD` for stable releases.
+- [ ] Optional hosted-account builds configure the public `CORTEX_CLOUD_API_URL` and
+      `CORTEX_WORKOS_CLIENT_ID` release variables.
+- [ ] Live WorkOS, Stripe, Cloudflare, and provider paths have been exercised before enabling paid
+      services. Free/local-first releases keep those capabilities disabled and require no provider
+      secret in the desktop application.
 - [ ] Repository visibility remains private until every item above is complete.

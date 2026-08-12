@@ -265,8 +265,9 @@ Cortex ToolBox currently targets Windows 10 and Windows 11.
 4. Launch Cortex.
 5. Open an existing FiveM resource or create a Cortex project.
 
-> [!NOTE]
-> Some releases may be unsigned when repository signing credentials are not configured. Windows can display an additional warning for unsigned installers. Verify that the installer came from this repository and compare its published SHA-256 checksum when available.
+Stable releases are Authenticode-signed and include SHA-256 checksums plus a CycloneDX SBOM. Beta
+releases may be unsigned when signing credentials are intentionally unavailable; unsigned builds
+are always marked as prereleases.
 
 ## Privacy and safety
 
@@ -323,7 +324,11 @@ Cortex supports three channels:
 
 Packaged Windows builds can check GitHub Releases when updating is enabled. Cortex downloads the Squirrel installer, checks it against the release's published SHA-256 checksum and asks before opening it.
 
-Tagged pushes matching `v*` run the release workflow, which tests the monorepo, packages Windows artefacts, generates checksums and an SBOM, then publishes the GitHub release.
+The release workflow validates an exact `main` commit, runs every Linux and Windows quality gate,
+packages and signs the application and installer, generates checksums and an SBOM, scans the
+generated archives, creates a private draft, downloads it again, and performs clean-runner
+install/launch/uninstall verification. Only then does it publish the GitHub Release. Failed draft
+verification removes the draft and generated tag.
 
 ## Architecture
 
@@ -426,6 +431,29 @@ pnpm make:beta
 ```
 
 The current makers produce a Windows Squirrel installer, ZIP package and NUPKG artefact.
+
+### Automated releases
+
+Configure signing once from an owner PowerShell session:
+
+```powershell
+./scripts/configure-release.ps1 -CertificatePath C:\path\to\codesigning.pfx
+```
+
+This uploads the certificate and password to the protected GitHub `release` Environment without
+storing them in the repository or command history. Hosted account features can be compiled into the
+desktop at the same time by also passing the public Worker URL and WorkOS client ID.
+
+After the version and changelog are committed to `main`, run:
+
+```powershell
+pnpm release:check -- 1.0.0 stable
+pnpm release -- 1.0.0 stable
+```
+
+The second command dispatches GitHub Actions and waits for the release result. It does not build or
+upload files from the maintainer machine. Beta versions use a prerelease version and channel, for
+example `pnpm release -- 1.1.0-beta.1 beta`.
 
 ### Quality checks
 

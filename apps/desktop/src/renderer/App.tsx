@@ -29,6 +29,7 @@ import { usePreferences } from './hooks/usePreferences';
 import { useAiStore } from './ai/ai-store';
 import { CURRENT_ONBOARDING_VERSION, normalizePreferences } from '../shared/contracts';
 import { PREFERENCES_QUERY_KEY } from './hooks/usePreferences';
+import { setSystemColorMode } from './lib/theme/system-color-mode';
 
 function recordWorkspaceRenderError(error: Error, info: ErrorInfo): void {
   void window.cortex.reports.recordClientError({
@@ -138,6 +139,7 @@ export function App(): React.JSX.Element {
   const hydrateModules = useModuleStore((state) => state.hydrateFromPreferences);
   const isModuleInstalled = useModuleStore((state) => state.isInstalled);
   const [viewRecoveryKey, setViewRecoveryKey] = useState(0);
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const tab = tabs.find((item) => item.id === activeTab) ?? tabs[0];
   const settingsActive = tab?.kind === 'settings';
   const workbenchTab = settingsActive
@@ -158,9 +160,18 @@ export function App(): React.JSX.Element {
   }, [workspaceName]);
   useEffect(() => {
     if (!bridgeReady) return;
-    void window.cortex.projects.current().then((result) => {
-      if (result.ok) setWorkspace(result.data);
-    });
+    let active = true;
+    void window.cortex.projects
+      .current()
+      .then((result) => {
+        if (active && result.ok) setWorkspace(result.data);
+      })
+      .finally(() => {
+        if (active) setWorkspaceHydrated(true);
+      });
+    return () => {
+      active = false;
+    };
   }, [bridgeReady, setWorkspace]);
   useEffect(() => {
     if (!bridgeReady) return;
@@ -176,6 +187,10 @@ export function App(): React.JSX.Element {
       }
     });
   }, [bridgeReady, setFiles, workspace]);
+  useEffect(() => {
+    if (!bridgeReady) return;
+    return window.cortex.system.onColorSchemeChanged(setSystemColorMode);
+  }, [bridgeReady]);
   useEffect(() => {
     if (!bridgeReady || !preferences.data) return;
     hydrateModules(preferences.data.installedModules);
@@ -247,6 +262,7 @@ export function App(): React.JSX.Element {
     tabModuleId !== null && !isModuleInstalled(tabModuleId) ? MODULE_BY_ID[tabModuleId] : null;
   const moduleBlocked = blockedModule !== null;
   const overviewActive = !settingsActive && workbenchTab?.kind === 'welcome' && !workspace;
+  const canRenderAiPanel = Boolean(!settingsActive && workspace && preferences.data?.aiEnabled);
   const showAiPanel = Boolean(
     !settingsActive && workspace && preferences.data?.aiEnabled && aiPanelOpen,
   );
@@ -265,7 +281,7 @@ export function App(): React.JSX.Element {
     );
   }
 
-  if (preferences.isPending || !preferences.data) {
+  if (preferences.isPending || !preferences.data || !workspaceHydrated) {
     return <WorkspaceLoading />;
   }
 
@@ -284,7 +300,7 @@ export function App(): React.JSX.Element {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-workspace-hydrated="true">
       <a className="skip-link" href="#workspace-content">
         Skip to workspace
       </a>
@@ -372,7 +388,7 @@ export function App(): React.JSX.Element {
             </Activity>
           </div>
         </main>
-        {showAiPanel ? (
+        {canRenderAiPanel ? (
           <Suspense fallback={null}>
             <AiWorkspacePanel />
           </Suspense>

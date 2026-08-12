@@ -17,6 +17,22 @@ export type Finding = z.infer<typeof findingSchema>;
 
 const roles = ['clientScripts', 'serverScripts', 'sharedScripts', 'files'] as const;
 
+export type ManifestReferenceKind =
+  'client_script' | 'server_script' | 'shared_script' | 'file' | 'ui_page' | 'data_file';
+
+export interface MissingManifestReference {
+  kind: ManifestReferenceKind;
+  value: string;
+  line: number;
+}
+
+const ROLE_REFERENCE_KINDS: Record<(typeof roles)[number], ManifestReferenceKind> = {
+  clientScripts: 'client_script',
+  serverScripts: 'server_script',
+  sharedScripts: 'shared_script',
+  files: 'file',
+};
+
 const SCRIPT_EXTENSIONS = new Set(['.lua', '.js', '.mjs', '.cjs', '.ts', '.tsx']);
 
 export function isAbsoluteManifestReference(reference: string): boolean {
@@ -26,6 +42,55 @@ export function isAbsoluteManifestReference(reference: string): boolean {
   if (/^\\\\[^\\/]+[\\/]/.test(value) || /^\/\/[^\\/]+[\\/]/.test(value)) return true;
   if (value.startsWith('/') || value.startsWith('\\')) return true;
   return false;
+}
+
+export function findMissingManifestReferences(
+  files: Pick<ResourceFile, 'relativePath'>[],
+  manifest: ParsedManifest,
+): MissingManifestReference[] {
+  const names = files.map((file) => file.relativePath.replaceAll('\\', '/'));
+  const exactNames = new Set(names);
+  const matchers = new Map<string, (name: string) => boolean>();
+  const hasReference = (reference: string): boolean => {
+    const normalized = reference.replaceAll('\\', '/').replace(/^\.\//, '');
+    if (exactNames.has(normalized)) return true;
+    let matches = matchers.get(normalized);
+    if (!matches) {
+      const matcher = new Minimatch(normalized, { nocase: false, dot: true });
+      matches = (name) => matcher.match(name);
+      matchers.set(normalized, matches);
+    }
+    return names.some(matches);
+  };
+  const references: MissingManifestReference[] = [];
+  for (const role of roles) {
+    for (const reference of manifest[role]) {
+      if (!hasReference(reference.value)) {
+        references.push({
+          kind: ROLE_REFERENCE_KINDS[role],
+          value: reference.value,
+          line: reference.range.line,
+        });
+      }
+    }
+  }
+  if (manifest.uiPage && !hasReference(manifest.uiPage.value)) {
+    references.push({
+      kind: 'ui_page',
+      value: manifest.uiPage.value,
+      line: manifest.uiPage.range.line,
+    });
+  }
+  for (const dataFile of manifest.dataFiles) {
+    if (!hasReference(dataFile.path.value)) {
+      references.push({
+        kind: 'data_file',
+        value: dataFile.path.value,
+        line: dataFile.path.range.line,
+      });
+    }
+  }
+  return references;
 }
 
 const SENSITIVE_CONTENT_PATTERNS: { id: string; re: RegExp }[] = [
@@ -56,19 +121,7 @@ export function auditResource(
 ): Finding[] {
   const findings: Finding[] = [];
   const names = files.map((file) => file.relativePath);
-  const exactNames = new Set(names);
   const insensitiveNames = new Map(names.map((name) => [name.toLowerCase(), name]));
-  const matchers = new Map<string, (name: string) => boolean>();
-  const hasReference = (reference: string): boolean => {
-    if (exactNames.has(reference)) return true;
-    let matches = matchers.get(reference);
-    if (!matches) {
-      const matcher = new Minimatch(reference, { nocase: false });
-      matches = (name) => matcher.match(name);
-      matchers.set(reference, matches);
-    }
-    return names.some(matches);
-  };
   const add = (finding: Omit<Finding, 'suppressed' | 'documentation'>): void => {
     findings.push({
       ...finding,
@@ -95,6 +148,11 @@ export function auditResource(
       remediation: 'Review and migrate the manifest to fxmanifest.lua.',
     });
   if (manifest) {
+    const missingReferences = new Set(
+      findMissingManifestReferences(files, manifest).map(
+        (reference) => `${reference.kind}:${reference.line}:${reference.value}`,
+      ),
+    );
     if (!manifest.fxVersion)
       add({
         severity: 'error',
@@ -137,7 +195,11 @@ export function auditResource(
             explanation: `Manifest reference ${reference.value} is an absolute path and is not portable.`,
             remediation: 'Use a path relative to the resource root.',
           });
-        if (!hasReference(reference.value))
+        if (
+          missingReferences.has(
+            `${ROLE_REFERENCE_KINDS[role]}:${reference.range.line}:${reference.value}`,
+          )
+        )
           add({
             severity: 'error',
             ruleId: 'manifest/missing-reference',
@@ -167,7 +229,7 @@ export function auditResource(
           explanation: `Manifest reference ${manifest.uiPage.value} is an absolute path and is not portable.`,
           remediation: 'Use a path relative to the resource root.',
         });
-      if (!hasReference(manifest.uiPage.value))
+      if (missingReferences.has(`ui_page:${manifest.uiPage.range.line}:${manifest.uiPage.value}`))
         add({
           severity: 'error',
           ruleId: 'manifest/missing-ui-page',
@@ -186,6 +248,15 @@ export function auditResource(
           line: dataFile.path.range.line,
           explanation: `Manifest reference ${dataFile.path.value} is an absolute path and is not portable.`,
           remediation: 'Use a path relative to the resource root.',
+        });
+      if (missingReferences.has(`data_file:${dataFile.path.range.line}:${dataFile.path.value}`))
+        add({
+          severity: 'error',
+          ruleId: 'manifest/missing-reference',
+          file: manifestName ?? 'fxmanifest.lua',
+          line: dataFile.path.range.line,
+          explanation: `No file matches ${dataFile.path.value}.`,
+          remediation: 'Correct the data_file path or include the missing stream/resource file.',
         });
     }
     for (const unsupported of manifest.unsupported)

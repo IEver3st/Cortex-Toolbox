@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { analyzeLuaWhileLoops } from './lua-loop-analysis';
 
 export const evidenceSchema = z.object({
   sourceFile: z.string(),
@@ -171,6 +172,118 @@ const dynamicNamePatterns: { label: string; expression: RegExp }[] = [
   },
 ];
 
+/**
+ * Mark source positions that are executable code. The analyzer still reads exact
+ * quoted literal names from the original line, but ignores API-looking text in
+ * comments and strings. This is deliberately a small lexer rather than a Lua or
+ * JavaScript parser; preserving line/column shape keeps evidence deterministic.
+ */
+function buildCodeMasks(
+  lines: string[],
+  language: 'lua' | 'javascript' | 'typescript',
+): boolean[][] {
+  const masks: boolean[][] = [];
+  let quote: "'" | '"' | '`' | null = null;
+  let block: 'comment' | 'lua-string' | null = null;
+
+  for (const line of lines) {
+    const mask = Array.from({ length: line.length }, () => false);
+    let escaped = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const current = line[index] ?? '';
+      const next = line[index + 1] ?? '';
+
+      if (block === 'comment') {
+        if (language === 'lua' && current === ']' && next === ']') {
+          block = null;
+          index += 1;
+        } else if (language !== 'lua' && current === '*' && next === '/') {
+          block = null;
+          index += 1;
+        }
+        continue;
+      }
+      if (block === 'lua-string') {
+        if (current === ']' && next === ']') {
+          block = null;
+          index += 1;
+        }
+        continue;
+      }
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (current === '\\') escaped = true;
+        else if (current === quote) quote = null;
+        continue;
+      }
+
+      if (language === 'lua') {
+        if (current === '-' && next === '-') {
+          if (line[index + 2] === '[' && line[index + 3] === '[') {
+            const close = line.indexOf(']]', index + 4);
+            if (close >= 0) {
+              index = close + 1;
+              continue;
+            }
+            block = 'comment';
+          }
+          break;
+        }
+        if (current === '[' && next === '[') {
+          const close = line.indexOf(']]', index + 2);
+          if (close >= 0) {
+            index = close + 1;
+            continue;
+          }
+          block = 'lua-string';
+          index += 1;
+          continue;
+        }
+      } else {
+        if (current === '/' && next === '/') break;
+        if (current === '/' && next === '*') {
+          block = 'comment';
+          index += 1;
+          continue;
+        }
+      }
+
+      if (current === "'" || current === '"' || (language !== 'lua' && current === '`')) {
+        quote = current;
+        continue;
+      }
+      mask[index] = true;
+    }
+    // Single/double quoted literals cannot legally span lines in these inputs.
+    // Template literals can, so retain that state only for JavaScript backticks.
+    if (quote !== '`') quote = null;
+    masks.push(mask);
+  }
+  return masks;
+}
+
+function execInCode(expression: RegExp, line: string, mask: boolean[]): RegExpExecArray | null {
+  let offset = 0;
+  while (offset <= line.length) {
+    const match = expression.exec(line.slice(offset));
+    if (!match) return null;
+    const start = offset + match.index;
+    if (mask[start] === true) return match;
+    offset = start + Math.max(1, match[0].length);
+  }
+  return null;
+}
+
+function applyCodeMask(line: string, mask: boolean[]): string {
+  // Index by UTF-16 code unit, matching RegExp offsets and the mask produced above.
+  // Rejoining adjacent surrogate code units preserves executable Unicode exactly.
+  const masked = new Array<string>(line.length);
+  for (let index = 0; index < line.length; index += 1) {
+    masked[index] = mask[index] === true ? (line[index] ?? '') : ' ';
+  }
+  return masked.join('');
+}
+
 function pieceKindForSymbols(symbols: ScriptSymbol[]): z.infer<typeof scriptPieceSchema>['kind'] {
   if (symbols.some((symbol) => symbol.kind === 'function')) return 'function';
   if (symbols.some((symbol) => symbol.kind === 'command')) return 'command';
@@ -305,6 +418,10 @@ export function analyzeScript(relativePath: string, source: string): ScriptAnaly
         ? 'typescript'
         : 'javascript';
   const lines = source.replaceAll('\r\n', '\n').split('\n');
+  const codeMasks = buildCodeMasks(lines, language);
+  const codeOnlySource = lines
+    .map((line, lineIndex) => applyCodeMask(line, codeMasks[lineIndex] ?? []))
+    .join('\n');
   const symbols: ScriptSymbol[] = [];
   const warnings: string[] = [];
   const seen = new Set<string>();
@@ -312,10 +429,12 @@ export function analyzeScript(relativePath: string, source: string): ScriptAnaly
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
+    const codeMask = codeMasks[index] ?? [];
     for (const group of patterns)
       for (const expression of group.expressions) {
-        const match = expression.exec(line);
-        const name = match?.[1];
+        const match = execInCode(expression, line, codeMask);
+        if (!match) continue;
+        const name = match[1];
         if (!name) continue;
         const key = `${group.kind}:${group.direction}:${name}:${index + 1}`;
         if (seen.has(key)) continue;
@@ -336,19 +455,19 @@ export function analyzeScript(relativePath: string, source: string): ScriptAnaly
       }
 
     for (const dynamic of dynamicNamePatterns) {
-      if (!dynamic.expression.test(line)) continue;
+      const match = execInCode(dynamic.expression, line, codeMask);
+      if (!match) continue;
       const warning = `Unresolved dynamic ${dynamic.label} near line ${index + 1}`;
       if (seenWarnings.has(warning)) continue;
       seenWarnings.add(warning);
       warnings.push(warning);
     }
 
-    const functionMatch =
+    const functionExpression =
       language === 'lua'
-        ? /^\s*(?:local\s+)?function\s+([A-Za-z_][\w.:]*)/.exec(line)
-        : /(?:function\s+([A-Za-z_$][\w$]*)|(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\()/.exec(
-            line,
-          );
+        ? /^\s*(?:local\s+)?function\s+([A-Za-z_][\w.:]*)/
+        : /(?:function\s+([A-Za-z_$][\w$]*)|(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\()/;
+    const functionMatch = execInCode(functionExpression, line, codeMask);
     const functionName = functionMatch?.[1] ?? functionMatch?.[2];
     if (functionName)
       symbols.push({
@@ -371,10 +490,12 @@ export function analyzeScript(relativePath: string, source: string): ScriptAnaly
   const references: ScriptReference[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
+    const codeMask = codeMasks[index] ?? [];
     for (const definition of functionDefinitions) {
       const escapedName = definition.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const call = new RegExp(`\\b${escapedName}\\s*\\(`);
-      if (!call.test(line) || definition.line === index + 1) continue;
+      const match = execInCode(call, line, codeMask);
+      if (!match || definition.line === index + 1) continue;
       const caller =
         [...functionDefinitions].reverse().find((item) => item.line < index + 1)?.name ?? null;
       references.push({
@@ -392,29 +513,36 @@ export function analyzeScript(relativePath: string, source: string): ScriptAnaly
       });
     }
   }
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!/^\s*while\s+true\s+do\b/.test(lines[index] ?? '')) continue;
-    const body = lines.slice(index, Math.min(lines.length, index + 120)).join('\n');
-    const nearestEnd = body.search(/^\s*end\s*$/m);
-    const loopBody = nearestEnd >= 0 ? body.slice(0, nearestEnd) : body;
-    if (!/\b(?:Citizen\.)?Wait\s*\(/.test(loopBody)) {
-      warnings.push(`Continuous loop has no visible Wait near line ${index + 1}`);
-    }
-    if (/\b(?:TriggerServerEvent|TriggerClientEvent|emitNet)\s*\(/.test(loopBody)) {
-      warnings.push(`Network event is emitted from a continuous loop near line ${index + 1}`);
+  if (language === 'lua') {
+    for (const loop of analyzeLuaWhileLoops(source)) {
+      if (loop.mayRunContinuously) {
+        warnings.push(
+          loop.unconditional
+            ? `Continuous loop has no visible yield near line ${loop.startLine}`
+            : `Conditional loop may execute continuously without yielding near line ${loop.startLine}`,
+        );
+      }
+      if (loop.hasNetworkEmission && !loop.hasYield) {
+        warnings.push(
+          `Network event is emitted from an unyielded loop near line ${loop.startLine}`,
+        );
+      }
     }
   }
-  if (/\bsetInterval\s*\([^,]+,\s*(?:0|1|5|10)\s*\)/s.test(source)) {
+  if (/\bsetInterval\s*\([^,]+,\s*(?:0|1|5|10)\s*\)/s.test(codeOnlySource)) {
     warnings.push('Very short setInterval detected; verify that this work must run continuously.');
   }
-  if (/\b(?:setTick|Wait\s*\(\s*0\s*\))/.test(source) && /\bGetGamePool\s*\(/.test(source)) {
+  if (
+    /\b(?:setTick|Wait\s*\(\s*0\s*\))/.test(codeOnlySource) &&
+    /\bGetGamePool\s*\(/.test(codeOnlySource)
+  ) {
     warnings.push('Broad entity enumeration appears in a frame-sensitive path.');
   }
   if (source.length > 1_000_000)
     warnings.push('Large script; only deterministic symbol extraction was performed.');
   if (
-    /RegisterNetEvent|onNet\s*\(/.test(source) &&
-    !/type\s*\(|typeof\s+|z\.object|validate/i.test(source)
+    /RegisterNetEvent|onNet\s*\(/.test(codeOnlySource) &&
+    !/type\s*\(|typeof\s+|z\.object|validate/i.test(codeOnlySource)
   )
     warnings.push(
       'Network handlers were found; manually verify server-side payload validation and authorization.',

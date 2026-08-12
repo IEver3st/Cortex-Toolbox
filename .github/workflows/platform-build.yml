@@ -1,5 +1,6 @@
 name: Platform build matrix
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       channel:
@@ -14,6 +15,7 @@ permissions:
   contents: read
 jobs:
   build:
+    name: Windows release readiness
     runs-on: windows-latest
     env:
       CORTEX_RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
@@ -23,14 +25,30 @@ jobs:
       CORTEX_WORKOS_CLIENT_ID: ${{ vars.CORTEX_WORKOS_CLIENT_ID }}
       CORTEX_CLOUD_API_URL: ${{ vars.CORTEX_CLOUD_API_URL }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with: { version: 10.33.0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm security:scan
       - run: pnpm audit --audit-level high
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - name: Build
+        shell: pwsh
+        run: |
+          foreach ($attempt in 1..3) {
+            pnpm build
+            $taskExitCode = $LASTEXITCODE
+            if ($taskExitCode -eq 0) { exit 0 }
+            if ($attempt -eq 3) { exit $taskExitCode }
+            Write-Host "Build attempt $attempt failed; retrying the external Electron download."
+            Start-Sleep -Seconds ($attempt * 5)
+          }
+      - run: pnpm test:e2e
       - run: pnpm icons
       - name: Package Windows installer
         shell: bash
@@ -40,7 +58,15 @@ jobs:
           else
             pnpm make
           fi
-      - uses: actions/upload-artifact@v4
+      - name: Smoke install, launch, and uninstall
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/desktop/out/make -Recurse -File -Filter '*Setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'No Windows installer was produced.' }
+          ./scripts/smoke-windows-installer.ps1 `
+            -InstallerPath $installer.FullName `
+            -Channel '${{ env.CORTEX_RELEASE_CHANNEL }}'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cortex-${{ env.CORTEX_RELEASE_CHANNEL }}-windows-unsigned
           path: apps/desktop/out/make/**/*
