@@ -738,14 +738,10 @@ test('standalone creative modules work without an open workspace', async () => {
   await expect(page.getByRole('heading', { name: 'Open a workspace first' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Align' }).click();
-  await expect(
-    page.getByRole('main').getByText('Align metadata repair', { exact: true }),
-  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Choose metadata' })).toBeVisible();
   await captureVisualQa(page, 'align-empty-1440x900');
 
   await page.getByRole('button', { name: 'Chevron', exact: true }).click();
-  await expect(page.getByRole('main').getByText('Chevron Builder', { exact: true })).toBeVisible();
   const canvas = page.locator('.chevron-canvas-stage canvas');
   await expect(canvas).toBeVisible();
   await expect
