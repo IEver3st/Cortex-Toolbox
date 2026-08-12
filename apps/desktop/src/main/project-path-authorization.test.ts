@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,9 +13,15 @@ describe('project path authorization', () => {
     await mkdir(child, { recursive: true });
     await mkdir(recent, { recursive: true });
 
-    await expect(resolveAuthorizedProjectPath(active, active, [])).resolves.toBe(active);
-    await expect(resolveAuthorizedProjectPath(child, active, [])).resolves.toBe(child);
-    await expect(resolveAuthorizedProjectPath(recent, null, [recent])).resolves.toBe(recent);
+    await expect(resolveAuthorizedProjectPath(active, active, [])).resolves.toBe(
+      await realpath(active),
+    );
+    await expect(resolveAuthorizedProjectPath(child, active, [])).resolves.toBe(
+      await realpath(child),
+    );
+    await expect(resolveAuthorizedProjectPath(recent, null, [recent])).resolves.toBe(
+      await realpath(recent),
+    );
   });
 
   it('rejects arbitrary paths and symlink escapes from the active workspace', async () => {
