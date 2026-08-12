@@ -18,6 +18,11 @@ overrides:
   nanoid: 3.3.17
   postcss: 8.5.23
 
+patchedDependencies:
+  extract-zip@2.0.1:
+    hash: d7eb3f6ac3dea6fa799edab625604a43c7bf472c5f906427fa805d71df500947
+    path: patches/extract-zip@2.0.1.patch
+
 importers:
 
   .:
@@ -249,6 +254,9 @@ importers:
       electron:
         specifier: 43.1.0
         version: 43.1.0
+      extract-zip:
+        specifier: 2.0.1
+        version: 2.0.1(patch_hash=d7eb3f6ac3dea6fa799edab625604a43c7bf472c5f906427fa805d71df500947)
       vite:
         specifier: 8.1.4
         version: 8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
@@ -5601,7 +5609,7 @@ snapshots:
       '@electron/windows-sign': 1.2.2
       '@malept/cross-spawn-promise': 2.0.0
       debug: 4.4.3
-      extract-zip: 2.0.1
+      extract-zip: 2.0.1(patch_hash=d7eb3f6ac3dea6fa799edab625604a43c7bf472c5f906427fa805d71df500947)
       filenamify: 4.3.0
       fs-extra: 11.3.6
       galactus: 1.0.0
@@ -7629,7 +7637,7 @@ snapshots:
       iconv-lite: 0.4.24
       tmp: 0.2.7
 
-  extract-zip@2.0.1:
+  extract-zip@2.0.1(patch_hash=d7eb3f6ac3dea6fa799edab625604a43c7bf472c5f906427fa805d71df500947):
     dependencies:
       debug: 4.4.3
       get-stream: 5.2.0

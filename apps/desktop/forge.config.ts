@@ -30,6 +30,19 @@ const config: ForgeConfig = {
       InternalName: brand.executableName,
       OriginalFilename: `${brand.executableName}.exe`,
     },
+    ...(process.env.CORTEX_WINDOWS_CERTIFICATE_FILE
+      ? {
+          windowsSign: {
+            certificateFile: process.env.CORTEX_WINDOWS_CERTIFICATE_FILE,
+            ...(process.env.CORTEX_WINDOWS_CERTIFICATE_PASSWORD
+              ? { certificatePassword: process.env.CORTEX_WINDOWS_CERTIFICATE_PASSWORD }
+              : {}),
+            timestampServer: 'http://timestamp.digicert.com',
+            description: brand.productName,
+            website: 'https://github.com/IEver3st/Cortex-Toolbox',
+          },
+        }
+      : {}),
     // Bake channel so packaged apps report the correct release track.
     extraResource: [
       path.join(brandDir, 'icon.png'),
@@ -70,6 +83,7 @@ const config: ForgeConfig = {
             ...(process.env.CORTEX_WINDOWS_CERTIFICATE_PASSWORD
               ? { certificatePassword: process.env.CORTEX_WINDOWS_CERTIFICATE_PASSWORD }
               : {}),
+            signWithParams: '/fd SHA256 /tr http://timestamp.digicert.com /td SHA256',
           }
         : {}),
     }),

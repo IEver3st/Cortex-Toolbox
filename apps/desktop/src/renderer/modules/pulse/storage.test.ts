@@ -3,6 +3,7 @@ import {
   PULSE_CHANNEL_COUNT,
   PULSE_STEP_COUNT,
   PULSE_STORAGE_KEY,
+  createEmptyPattern,
   createStarterPattern,
   normalizePulsePattern,
   readPulseStudio,
@@ -15,6 +16,20 @@ describe('Pulse studio storage', () => {
     expect(pattern.channels).toHaveLength(PULSE_CHANNEL_COUNT);
     expect(pattern.channels.every((channel) => channel.length === PULSE_STEP_COUNT)).toBe(true);
     expect(pattern.colors).toHaveLength(PULSE_CHANNEL_COUNT);
+  });
+
+  it('clears every sequencer cell while preserving pattern metadata', () => {
+    const pattern = createStarterPattern();
+    const cleared = createEmptyPattern(pattern);
+
+    expect(cleared).toMatchObject({
+      name: pattern.name,
+      bpm: pattern.bpm,
+      sirenId: pattern.sirenId,
+      colors: pattern.colors,
+    });
+    expect(cleared.channels).toHaveLength(PULSE_CHANNEL_COUNT);
+    expect(cleared.channels.every((channel) => channel.every((active) => !active))).toBe(true);
   });
 
   it('pads legacy patterns and keeps stored numeric values', () => {

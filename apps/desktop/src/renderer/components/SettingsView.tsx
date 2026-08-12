@@ -141,6 +141,10 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+const SECTION_OPTIONS: { value: SectionId; label: string }[] = NAV_GROUPS.flatMap((group) =>
+  group.items.map((item) => ({ value: item.id, label: item.label })),
+);
+
 const TITLES: Record<SectionId, string> = {
   general: 'General',
   appearance: 'Appearance',
@@ -557,6 +561,18 @@ export function SettingsView(): React.JSX.Element {
       <main
         className={`cursor-settings-main${active === 'appearance' ? ' is-theme-studio' : ''}${active === 'about' ? ' is-about' : ''}${active === 'support' ? ' is-support' : ''}`}
       >
+        <div className="settings-compact-nav">
+          <button type="button" className="settings-compact-back" onClick={goBack}>
+            <ArrowLeft aria-hidden="true" /> Back to app
+          </button>
+          <Select
+            id="settings-section-compact"
+            ariaLabel="Settings section"
+            value={active}
+            options={SECTION_OPTIONS}
+            onChange={setActive}
+          />
+        </div>
         <SectionPageHost pageKey={active} className="cursor-settings-page-host" variant="settings">
           {active !== 'appearance' ? (
             <header className="cursor-settings-main-header">
@@ -640,6 +656,21 @@ export function SettingsView(): React.JSX.Element {
                       <button type="button" onClick={() => update('onboardingVersion', 0)}>
                         Run onboarding again
                       </button>
+                    }
+                  />
+                </SettingsGroup>
+                <SettingsGroup title="Advanced">
+                  <Row
+                    label="Experimental tools"
+                    description="Reveal developer previews such as Extensions. Discovery reads declarative manifests only; extension code remains inert."
+                    htmlFor="experimental-tools"
+                    control={
+                      <Toggle
+                        id="experimental-tools"
+                        name="experimentalTools"
+                        checked={draft.experimentalTools}
+                        onChange={(value) => update('experimentalTools', value)}
+                      />
                     }
                   />
                 </SettingsGroup>
@@ -805,7 +836,7 @@ export function SettingsView(): React.JSX.Element {
                       </div>
                       <div>
                         <dt>License</dt>
-                        <dd>GPL-3.0</dd>
+                        <dd>PolyForm Noncommercial 1.0.0</dd>
                       </div>
                     </dl>
                   </div>

@@ -1,5 +1,5 @@
 import type { HandlingFieldDefinition } from '@cortex/vehicle-meta';
-import { Clipboard, RotateCcw } from 'lucide-react';
+import { BookOpen, Clipboard, RotateCcw } from 'lucide-react';
 import { handlingNativeCall } from '@cortex/vehicle-meta';
 import { toast } from 'sonner';
 import { copyText } from '../../../lib/clipboard';
@@ -14,6 +14,7 @@ export function ParameterField({
   aiModified,
   onChange,
   onReset,
+  onOpenWiki,
 }: {
   field: HandlingFieldDefinition;
   value: number;
@@ -22,6 +23,7 @@ export function ParameterField({
   aiModified?: boolean;
   onChange: (value: number) => void;
   onReset: () => void;
+  onOpenWiki: () => void;
 }): React.JSX.Element {
   const inputId = `handling-${field.key}`;
   const changed = value !== original;
@@ -44,7 +46,18 @@ export function ParameterField({
     >
       <div className="chassis-param-head">
         <div className="chassis-param-labels">
-          <label htmlFor={inputId}>{field.label}</label>
+          <div className="chassis-param-title-row">
+            <label htmlFor={inputId}>{field.label}</label>
+            <button
+              type="button"
+              className="icon-button chassis-param-wiki"
+              aria-label={`Open wiki for ${field.label}`}
+              title={`Open ${field.label} wiki`}
+              onClick={onOpenWiki}
+            >
+              <BookOpen aria-hidden="true" />
+            </button>
+          </div>
           <code className="chassis-param-technical" title="Technical property name">
             {field.key}
           </code>
@@ -57,7 +70,7 @@ export function ParameterField({
             className="chassis-param-input"
             step={field.step}
             value={value}
-            aria-describedby={`${inputId}-desc`}
+            aria-describedby={`${inputId}-range`}
             onChange={(event) => {
               const next = event.currentTarget.valueAsNumber;
               if (Number.isFinite(next)) setFinite(next);
@@ -139,7 +152,7 @@ export function ParameterField({
         />
       )}
 
-      <div className="chassis-param-meta">
+      <div className="chassis-param-meta" id={`${inputId}-range`}>
         <span>
           Original <strong>{formatFieldValue(field, original)}</strong>
         </span>
@@ -149,9 +162,6 @@ export function ParameterField({
         {outsideTypicalRange ? <span className="is-warning">Outside typical range</span> : null}
         <span className="chassis-param-source">handling.meta</span>
       </div>
-      <p className="chassis-param-desc" id={`${inputId}-desc`}>
-        {field.description}
-      </p>
     </article>
   );
 }

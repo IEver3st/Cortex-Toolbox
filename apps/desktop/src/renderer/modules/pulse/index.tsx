@@ -22,7 +22,7 @@ import { Toggle } from '../../components/UiPrimitives';
 import { useWorkbenchDraftStore } from '../../store/workbench';
 import { downloadText } from '../shared/download';
 import {
-  createStarterPattern,
+  createEmptyPattern,
   normalizePulsePattern,
   PULSE_CHANNEL_COUNT as SIREN_CHANNEL_COUNT,
   PULSE_STEP_COUNT as SIREN_STEP_COUNT,
@@ -255,9 +255,9 @@ export default function Pulse(): React.JSX.Element {
 
   const resetPattern = () => {
     const previous = pattern;
-    applyPattern(createStarterPattern());
+    applyPattern(createEmptyPattern(pattern));
     setSelectedPresetId(null);
-    toast.success('Restored the starter pattern.', {
+    toast.success('Cleared the sequencer.', {
       action: { label: 'Undo', onClick: () => applyPattern(previous) },
     });
   };

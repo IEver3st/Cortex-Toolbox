@@ -2,6 +2,7 @@ import type { Preferences } from '../../../shared/contracts';
 import { contrastRatio } from './contrast';
 import { resolveCodeFont, resolveInterfaceFont } from './fonts';
 import { resolvedColorMode, resolveThemeTokens } from './resolve';
+import { subscribeSystemColorMode } from './system-color-mode';
 
 function setVar(root: HTMLElement, name: string, value: string): void {
   root.style.setProperty(name, value);
@@ -89,9 +90,9 @@ export function applyThemePreferences(preferences: Preferences): () => void {
   root.style.setProperty('--font-ui', resolveInterfaceFont(preferences.interfaceFont).family);
   root.style.setProperty('--font-mono', resolveCodeFont(preferences.codeFont).family);
 
-  const media = window.matchMedia('(prefers-color-scheme: light)');
-  if (preferences.colorMode === 'system') media.addEventListener('change', applyMode);
+  const unsubscribeSystemColorMode =
+    preferences.colorMode === 'system' ? subscribeSystemColorMode(applyMode) : undefined;
   return () => {
-    media.removeEventListener('change', applyMode);
+    unsubscribeSystemColorMode?.();
   };
 }

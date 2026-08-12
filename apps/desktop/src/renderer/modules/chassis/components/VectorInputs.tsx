@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react';
+import { BookOpen, RotateCcw } from 'lucide-react';
 
 type Axis = 'x' | 'y' | 'z';
 type Vector = Record<Axis, number>;
@@ -12,6 +12,7 @@ export function VectorInputs({
   step = 0.01,
   directions,
   aiModifiedAxes,
+  onOpenWiki,
   onChange,
   onReset,
 }: {
@@ -23,12 +24,26 @@ export function VectorInputs({
   step?: number;
   directions?: Record<Axis, [string, string]>;
   aiModifiedAxes?: ReadonlySet<Axis>;
+  onOpenWiki?: () => void;
   onChange: (axis: Axis, value: number) => void;
   onReset?: (axis: Axis) => void;
 }): React.JSX.Element {
   return (
     <fieldset className="chassis-vector-inputs chassis-vector-sliders">
-      <legend>{label}</legend>
+      <legend>
+        <span>{label}</span>
+        {onOpenWiki ? (
+          <button
+            type="button"
+            className="icon-button chassis-param-wiki"
+            aria-label={`Open wiki for ${label}`}
+            title={`Open ${label} wiki`}
+            onClick={onOpenWiki}
+          >
+            <BookOpen aria-hidden="true" />
+          </button>
+        ) : null}
+      </legend>
       {(['x', 'y', 'z'] as const).map((axis) => {
         const changed = original ? value[axis] !== original[axis] : false;
         const sliderMin = Math.min(min, value[axis], original?.[axis] ?? value[axis]);

@@ -11,6 +11,25 @@ describe('resource auditor', () => {
     );
     expect(findings.some((x) => x.ruleId === 'manifest/missing-reference')).toBe(true);
   });
+  it('detects missing NUI, file, and data_file references through one reference model', () => {
+    const findings = auditResource(
+      [],
+      parseManifest(
+        [
+          "fx_version 'cerulean'",
+          "game 'gta5'",
+          "ui_page 'html/index.html'",
+          "files { 'html/index.html', 'stream/*.ytyp' }",
+          "data_file 'DLC_ITYP_REQUEST' 'stream/*.ytyp'",
+        ].join('\n'),
+      ),
+      'fxmanifest.lua',
+    );
+    expect(findings.some((finding) => finding.ruleId === 'manifest/missing-ui-page')).toBe(true);
+    expect(
+      findings.filter((finding) => finding.ruleId === 'manifest/missing-reference'),
+    ).toHaveLength(3);
+  });
   it('does not market absence as success', () =>
     expect(auditResource([], null, null)[0]?.ruleId).toBe('manifest/missing'));
   it('does not report a case mismatch for an exact path', () => {

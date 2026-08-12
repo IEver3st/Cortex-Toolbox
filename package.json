@@ -16,6 +16,8 @@
     "icons": "pnpm --filter @cortex/desktop icons",
     "make": "pnpm --filter @cortex/desktop make",
     "make:beta": "pnpm --filter @cortex/desktop make:beta",
+    "release": "node scripts/release.ts",
+    "release:check": "node scripts/release.ts --check",
     "package": "pnpm --filter @cortex/desktop build",
     "package:beta": "pnpm --filter @cortex/desktop package:beta",
     "test": "vitest run",
@@ -55,6 +57,11 @@
     "*.{ts,tsx,js,json,md,css,yml,yaml}": "prettier --write"
   },
   "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-jmr9-qjv8-65gv"
+      ]
+    },
     "overrides": {
       "tar": "7.5.21",
       "undici": "7.29.0",
@@ -68,6 +75,9 @@
       "js-yaml@^4.0.0": "4.3.1",
       "nanoid": "3.3.17",
       "postcss": "8.5.23"
+    },
+    "patchedDependencies": {
+      "extract-zip@2.0.1": "patches/extract-zip@2.0.1.patch"
     }
   }
 }

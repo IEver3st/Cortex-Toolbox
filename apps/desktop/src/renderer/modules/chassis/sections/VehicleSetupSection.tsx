@@ -4,6 +4,8 @@ import type { VehicleIdentity } from '../types';
 import { VectorInputs } from '../components/VectorInputs';
 import { ParameterField } from '../components/ParameterField';
 import type { HandlingValues } from '@cortex/vehicle-meta';
+import { useState } from 'react';
+import { ParameterWikiDialog } from '../components/ParameterWikiDialog';
 
 export function VehicleSetupSection({
   identity,
@@ -31,6 +33,12 @@ export function VehicleSetupSection({
   ) => void;
 }): React.JSX.Element {
   const massField = HANDLING_FIELDS.find((field) => field.key === 'fMass');
+  const [wikiOpen, setWikiOpen] = useState(false);
+  const [wikiArticleId, setWikiArticleId] = useState<string | null>(null);
+  const openWiki = (articleId: string) => {
+    setWikiArticleId(articleId);
+    setWikiOpen(true);
+  };
 
   return (
     <div className="chassis-setup-page">
@@ -103,6 +111,7 @@ export function VehicleSetupSection({
             original={savedHandling.fMass}
             onChange={(value) => onHandlingChange('fMass', value)}
             onReset={() => onHandlingReset('fMass')}
+            onOpenWiki={() => openWiki('fMass')}
           />
         ) : null}
         <VectorInputs
@@ -110,6 +119,7 @@ export function VehicleSetupSection({
           value={handlingSetup.centreOfMass}
           min={-2}
           max={2}
+          onOpenWiki={() => openWiki('centreOfMass')}
           onChange={(axis, value) => onSetupVectorChange('centreOfMass', axis, value)}
         />
         <VectorInputs
@@ -117,6 +127,7 @@ export function VehicleSetupSection({
           value={handlingSetup.inertiaMultiplier}
           min={0.1}
           max={5}
+          onOpenWiki={() => openWiki('inertiaMultiplier')}
           onChange={(axis, value) => onSetupVectorChange('inertiaMultiplier', axis, value)}
         />
         <VectorInputs
@@ -124,6 +135,7 @@ export function VehicleSetupSection({
           value={handlingSetup.seatOffset}
           min={-2}
           max={2}
+          onOpenWiki={() => openWiki('seatOffset')}
           onChange={(axis, value) => onSetupVectorChange('seatOffset', axis, value)}
         />
       </section>
@@ -198,6 +210,11 @@ export function VehicleSetupSection({
           </div>
         </fieldset>
       </section>
+      <ParameterWikiDialog
+        open={wikiOpen}
+        initialArticleId={wikiArticleId}
+        onOpenChange={setWikiOpen}
+      />
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { THEME_PRESETS } from '../lib/themes';
 import { formatResultError } from '../lib/result';
 import { ActionButton } from './ActionButton';
 import { Select } from './Select';
-import { CortexMark } from './UiPrimitives';
+import { WindowControls } from './TitleBar';
 
 type OnboardingStep = 'welcome' | 'appearance' | 'ai' | 'behavior' | 'complete';
 
@@ -97,22 +97,24 @@ export function Onboarding({
     step === 'welcome' ? 0 : step === 'complete' ? 4 : Math.max(1, ORDER.indexOf(step));
 
   return (
-    <div className="onboarding-shell" role="dialog" aria-modal="true" aria-label="Cortex setup">
+    <div
+      className={`onboarding-shell${step === 'welcome' ? ' is-welcome' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Cortex setup"
+    >
       <header className="onboarding-titlebar">
-        <div>
-          <CortexMark />
-          <span>Cortex Toolbox</span>
-        </div>
-        {stepNumber > 0 ? <span>Setup {stepNumber} of 4</span> : <span>Welcome</span>}
+        {stepNumber > 0 ? (
+          <span className="onboarding-titlebar-status">Setup {stepNumber} of 4</span>
+        ) : null}
+        <WindowControls />
       </header>
 
       <main className="onboarding-stage" key={step}>
         {step === 'welcome' ? (
           <section className="onboarding-welcome">
-            <CortexMark size="large" />
-            <p className="onboarding-kicker">CORTEX TOOLBOX</p>
-            <h1>Free tools for people who make things.</h1>
-            <p>Set up the workbench in under a minute.</p>
+            <h1>CORTEX TOOLBOX</h1>
+            <p className="onboarding-tagline">Free tools for people who make things.</p>
             <button type="button" className="primary onboarding-primary" onClick={next}>
               Get started <ArrowRight aria-hidden="true" />
             </button>
@@ -123,7 +125,7 @@ export function Onboarding({
           <section className="onboarding-page">
             <div className="onboarding-heading">
               <p className="onboarding-kicker">APPEARANCE</p>
-              <h1>Make the workbench yours.</h1>
+              <h1>Make the toolbox yours.</h1>
               <p>These are the same appearance settings used throughout Cortex.</p>
             </div>
             <div className="onboarding-setting">
@@ -373,7 +375,7 @@ export function Onboarding({
               <Check />
             </span>
             <p className="onboarding-kicker">READY</p>
-            <h1>Your workbench is set.</h1>
+            <h1>Your toolbox is set.</h1>
             <div className="onboarding-summary">
               <span>
                 <strong>Appearance</strong>

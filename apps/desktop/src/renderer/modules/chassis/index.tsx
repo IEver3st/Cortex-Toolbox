@@ -33,9 +33,15 @@ import {
   buildRelationshipLinks,
   computeFieldChanges,
   applyAiHandlingPatch,
+  HANDLING_CATEGORY_LABELS,
   presetPreviewChanges,
   workbenchCategoryForField,
 } from './chassis-utils';
+import {
+  applyCategoryPreset,
+  categoryPresetFieldKeys,
+  type CategoryPreset,
+} from './category-presets';
 import { ChassisHeader, SectionNav } from './components/ChassisHeader';
 import { CreateHandlingDialog, type CreateHandlingInput } from './components/CreateHandlingDialog';
 import { PresetPreviewDialog } from './components/PresetPreviewDialog';
@@ -339,14 +345,48 @@ export default function Chassis(): React.JSX.Element {
     setConfig((current) => {
       const handling = { ...current.handling };
       for (const key of keys) handling[key] = savedConfig.handling[key];
-      return { ...current, handling };
+      return {
+        ...current,
+        handling,
+        handlingSetup:
+          category === 'physical'
+            ? {
+                ...current.handlingSetup,
+                centreOfMass: { ...savedConfig.handlingSetup.centreOfMass },
+                inertiaMultiplier: { ...savedConfig.handlingSetup.inertiaMultiplier },
+              }
+            : current.handlingSetup,
+      };
     });
     setAiModifiedFields((current) => {
       const next = new Set(current);
       for (const key of keys) next.delete(key);
+      if (category === 'physical') {
+        for (const vector of ['centreOfMass', 'inertiaMultiplier']) {
+          for (const axis of ['x', 'y', 'z']) next.delete(`${vector}.${axis}`);
+        }
+      }
       return next;
     });
+    setPresetId('custom');
     toast.success('Section restored to saved values.');
+  };
+
+  const applySubsystemPreset = (preset: CategoryPreset) => {
+    setConfig((current) => ({
+      ...current,
+      ...applyCategoryPreset(current.handling, current.handlingSetup, preset),
+    }));
+    setAiModifiedFields((current) => {
+      const next = new Set(current);
+      for (const key of categoryPresetFieldKeys(preset)) next.delete(key);
+      return next;
+    });
+    setPresetId('custom');
+    setSourceEdited(false);
+    toast.success(
+      `${preset.label} applied to ${HANDLING_CATEGORY_LABELS[category].toLowerCase()}.`,
+    );
   };
 
   const updateSetup = (patch: Partial<HandlingSetup>) => {
@@ -799,6 +839,7 @@ export default function Chassis(): React.JSX.Element {
               onFieldChange={setField}
               onFieldReset={resetField}
               onCategoryReset={resetCategory}
+              onApplyCategoryPreset={applySubsystemPreset}
               onSelectPreset={setPendingPreset}
               onSelectChange={navigateToField}
               onResetField={(key) => {

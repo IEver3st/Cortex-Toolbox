@@ -58,6 +58,15 @@ export function createStarterPattern(): SirenPattern {
   };
 }
 
+export function createEmptyPattern(pattern: SirenPattern): SirenPattern {
+  return {
+    ...pattern,
+    channels: Array.from({ length: PULSE_CHANNEL_COUNT }, () =>
+      Array.from({ length: PULSE_STEP_COUNT }, () => false),
+    ),
+  };
+}
+
 export function normalizePulsePattern(value: unknown): SirenPattern {
   const fallback = createStarterPattern();
   const record = asRecord(value);

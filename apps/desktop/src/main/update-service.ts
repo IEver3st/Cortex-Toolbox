@@ -1,14 +1,25 @@
 import { app, BrowserWindow, shell } from 'electron';
-import { createHash } from 'node:crypto';
-import { once } from 'node:events';
-import { createWriteStream } from 'node:fs';
-import { access, mkdir, readdir, rename, stat, unlink } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { brandingForChannel } from '../shared/branding';
 import type { Preferences, UpdateStatus } from '../shared/contracts';
 import { updatesChangedEvent } from '../shared/contracts';
 import type { MainEnv } from './config/env';
-import { assertTrustedGitHubAssetUrl, checksumForAsset } from './update-integrity';
+import {
+  assertTrustedGitHubAssetUrl,
+  checksumForAsset,
+  downloadBodyToFile,
+  fileMatchesSha256,
+} from './update-integrity';
 
 interface GitHubAsset {
   name: string;
@@ -21,6 +32,16 @@ interface GitHubRelease {
   prerelease: boolean;
   draft: boolean;
   assets: GitHubAsset[];
+}
+
+const RELEASE_VERSION_PATTERN =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const METADATA_REQUEST_TIMEOUT_MS = 20_000;
+const INSTALLER_DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
+
+function normalizedReleaseVersion(tag: string): string | null {
+  const version = tag.replace(/^v/i, '');
+  return RELEASE_VERSION_PATTERN.test(version) ? version : null;
 }
 
 function parseSemver(value: string): [number, number, number] | null {
@@ -65,6 +86,7 @@ function baseStatus(overrides: Partial<UpdateStatus> = {}): UpdateStatus {
 export class UpdateService {
   private status: UpdateStatus = baseStatus();
   private pendingInstaller: string | null = null;
+  private pendingInstallerHash: string | null = null;
   private checkInFlight: Promise<UpdateStatus> | null = null;
   private downloadInFlight: Promise<UpdateStatus> | null = null;
 
@@ -138,7 +160,16 @@ export class UpdateService {
           baseStatus({ phase: 'uptodate', message: 'You are on the latest release.' }),
         );
       }
-      const availableVersion = release.tag_name.replace(/^v/i, '');
+      const availableVersion = normalizedReleaseVersion(release.tag_name);
+      if (!availableVersion) {
+        return this.publish(
+          baseStatus({
+            phase: 'error',
+            releaseUrl: release.html_url,
+            message: 'The latest release tag is not a supported semantic version.',
+          }),
+        );
+      }
       if (!isNewerVersion(availableVersion, app.getVersion())) {
         return this.publish(
           baseStatus({ phase: 'uptodate', message: 'You are on the latest release.' }),
@@ -162,6 +193,7 @@ export class UpdateService {
         message: `Version ${availableVersion} is ready to download.`,
       });
       this.pendingInstaller = null;
+      this.pendingInstallerHash = null;
       this.publish(next);
       if (preferences.autoDownloadUpdates) {
         return await this.download(asset, release);
@@ -208,11 +240,23 @@ export class UpdateService {
         }),
       );
     }
+    if (normalizedReleaseVersion(sourceRelease.tag_name) !== availableVersion) {
+      return this.publish(
+        baseStatus({
+          phase: 'error',
+          availableVersion,
+          releaseUrl: sourceRelease.html_url,
+          message: 'The available release changed. Check for updates again before downloading.',
+        }),
+      );
+    }
 
     const targetDir = path.join(app.getPath('userData'), 'pending-update');
     const extension = installerExtension();
     const targetPath = path.join(targetDir, `cortex-update-${availableVersion}${extension}`);
     const partialPath = `${targetPath}.partial`;
+    const hashPath = `${targetPath}.sha256`;
+    const partialHashPath = `${hashPath}.partial`;
     this.publish(
       baseStatus({
         phase: 'downloading',
@@ -228,24 +272,16 @@ export class UpdateService {
       const expectedHash = await this.fetchExpectedChecksum(sourceRelease, downloadAsset);
       await mkdir(targetDir, { recursive: true });
       await unlink(partialPath).catch(() => undefined);
+      await unlink(partialHashPath).catch(() => undefined);
       const response = await fetch(downloadAsset.browser_download_url, {
         headers: { Accept: 'application/octet-stream', 'User-Agent': 'Cortex-ToolBox' },
+        signal: AbortSignal.timeout(INSTALLER_DOWNLOAD_TIMEOUT_MS),
       });
       if (!response.ok || !response.body) {
         throw new Error(`Download failed with status ${response.status}.`);
       }
       const total = Number(response.headers.get('content-length') ?? 0);
-      const reader = response.body.getReader();
-      const file = createWriteStream(partialPath, { flags: 'wx' });
-      const hash = createHash('sha256');
-      let received = 0;
-      for (;;) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        received += chunk.value.byteLength;
-        const buffer = Buffer.from(chunk.value);
-        hash.update(buffer);
-        if (!file.write(buffer)) await once(file, 'drain');
+      const downloaded = await downloadBodyToFile(response.body, partialPath, (received) => {
         if (total > 0) {
           this.publish(
             baseStatus({
@@ -257,19 +293,19 @@ export class UpdateService {
             }),
           );
         }
-      }
-      await new Promise<void>((resolve, reject) => {
-        file.end(() => resolve());
-        file.once('error', reject);
       });
-      const actualHash = hash.digest('hex');
+      const actualHash = downloaded.sha256;
       if (actualHash !== expectedHash) {
         await unlink(partialPath).catch(() => undefined);
         throw new Error('The downloaded installer failed SHA-256 verification.');
       }
+      await writeFile(partialHashPath, `${actualHash}\n`, { encoding: 'utf8', flag: 'wx' });
       await unlink(targetPath).catch(() => undefined);
+      await unlink(hashPath).catch(() => undefined);
       await rename(partialPath, targetPath);
+      await rename(partialHashPath, hashPath);
       this.pendingInstaller = targetPath;
+      this.pendingInstallerHash = actualHash;
       return this.publish(
         baseStatus({
           phase: 'ready',
@@ -281,6 +317,7 @@ export class UpdateService {
       );
     } catch (error) {
       await unlink(partialPath).catch(() => undefined);
+      await unlink(partialHashPath).catch(() => undefined);
       const message = error instanceof Error ? error.message : 'Update download failed.';
       return this.publish(
         baseStatus({
@@ -306,6 +343,7 @@ export class UpdateService {
     assertTrustedGitHubAssetUrl(checksumAsset.browser_download_url);
     const response = await fetch(checksumAsset.browser_download_url, {
       headers: { Accept: 'text/plain', 'User-Agent': 'Cortex-ToolBox' },
+      signal: AbortSignal.timeout(METADATA_REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) {
       throw new Error(`Checksum download failed with status ${response.status}.`);
@@ -318,13 +356,45 @@ export class UpdateService {
   }
 
   async install(): Promise<boolean> {
-    if (!this.pendingInstaller) {
+    if (!this.pendingInstaller || !this.pendingInstallerHash) {
       throw new Error('Download the update before installing.');
     }
     try {
       await access(this.pendingInstaller);
     } catch {
       throw new Error('The downloaded installer is no longer available.');
+    }
+    let expectedHash: string;
+    try {
+      const version = this.status.availableVersion;
+      if (!version) throw new Error('The pending update version is missing.');
+      const release = await this.fetchLatestRelease(this.readPreferences().releaseBranch);
+      if (!release || normalizedReleaseVersion(release.tag_name) !== version) {
+        throw new Error('The pending update is no longer the current release. Download it again.');
+      }
+      const asset = this.pickInstallerAsset(release);
+      if (!asset) throw new Error('The current release has no Windows installer asset.');
+      expectedHash = await this.fetchExpectedChecksum(release, asset);
+    } catch (error) {
+      throw new Error('Cortex could not refresh update integrity before installation.', {
+        cause: error,
+      });
+    }
+    if (
+      this.pendingInstallerHash !== expectedHash ||
+      !(await fileMatchesSha256(this.pendingInstaller, expectedHash))
+    ) {
+      this.pendingInstaller = null;
+      this.pendingInstallerHash = null;
+      this.publish(
+        baseStatus({
+          phase: 'error',
+          availableVersion: this.status.availableVersion,
+          releaseUrl: this.status.releaseUrl,
+          message: 'The pending installer changed after verification. Download it again.',
+        }),
+      );
+      throw new Error('The pending installer failed SHA-256 verification.');
     }
     const opened = await shell.openPath(this.pendingInstaller);
     if (opened) throw new Error(opened);
@@ -341,20 +411,34 @@ export class UpdateService {
     }
     const extension = installerExtension();
     const files = await readdir(targetDir);
-    const match = files.find(
-      (file) => file.startsWith('cortex-update-') && file.endsWith(extension),
-    );
-    if (!match) return;
-    const version = match.replace(/^cortex-update-/, '').replace(new RegExp(`${extension}$`), '');
-    this.pendingInstaller = path.join(targetDir, match);
-    this.publish(
-      baseStatus({
-        phase: 'ready',
-        availableVersion: version,
-        progress: 1,
-        message: `Version ${version} is ready to install.`,
-      }),
-    );
+    const candidates = files.filter((file) => {
+      if (!file.startsWith('cortex-update-') || !file.endsWith(extension)) return false;
+      const version = file.slice('cortex-update-'.length, -extension.length);
+      return RELEASE_VERSION_PATTERN.test(version);
+    });
+    for (const match of candidates) {
+      const targetPath = path.join(targetDir, match);
+      try {
+        const expectedHash = (await readFile(`${targetPath}.sha256`, 'utf8')).trim();
+        if (!(await fileMatchesSha256(targetPath, expectedHash))) continue;
+        const version = match
+          .replace(/^cortex-update-/, '')
+          .replace(new RegExp(`${extension}$`), '');
+        this.pendingInstaller = targetPath;
+        this.pendingInstallerHash = expectedHash.toLowerCase();
+        this.publish(
+          baseStatus({
+            phase: 'ready',
+            availableVersion: version,
+            progress: 1,
+            message: `Version ${version} is ready to install.`,
+          }),
+        );
+        return;
+      } catch {
+        // Ignore incomplete or modified pending downloads. A fresh check can replace them.
+      }
+    }
   }
 
   private async fetchLatestRelease(
@@ -370,6 +454,7 @@ export class UpdateService {
           'User-Agent': 'Cortex-ToolBox',
           'X-GitHub-Api-Version': '2022-11-28',
         },
+        signal: AbortSignal.timeout(METADATA_REQUEST_TIMEOUT_MS),
       },
     );
     if (!response.ok) {

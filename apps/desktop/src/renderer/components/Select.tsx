@@ -91,7 +91,7 @@ export function Select<T extends string>({
     }
 
     setCoords({ top, left, width });
-  }, [open, options]);
+  }, [open, options.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -130,11 +130,15 @@ export function Select<T extends string>({
     if (
       event.key === 'ArrowDown' ||
       event.key === 'ArrowUp' ||
+      event.key === 'Home' ||
+      event.key === 'End' ||
       event.key === 'Enter' ||
       event.key === ' '
     ) {
       event.preventDefault();
       if (!open) {
+        if (event.key === 'Home') setActiveIndex(0);
+        else if (event.key === 'End') setActiveIndex(options.length - 1);
         openMenu();
         return;
       }
@@ -142,6 +146,13 @@ export function Select<T extends string>({
         setActiveIndex((current) => (current + 1) % options.length);
       } else if (event.key === 'ArrowUp') {
         setActiveIndex((current) => (current - 1 + options.length) % options.length);
+      } else if (event.key === 'Home') {
+        setActiveIndex(0);
+      } else if (event.key === 'End') {
+        setActiveIndex(options.length - 1);
+      } else {
+        const option = options[activeIndex];
+        if (option) selectOption(option.value);
       }
     }
   };
@@ -222,7 +233,7 @@ export function Select<T extends string>({
         type="button"
         className="settings-select settings-select-trigger"
         role="combobox"
-        aria-controls={listboxId}
+        aria-controls={open ? listboxId : undefined}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={ariaLabel}

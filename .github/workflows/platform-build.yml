@@ -1,5 +1,6 @@
 name: Platform build matrix
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       channel:
@@ -14,6 +15,7 @@ permissions:
   contents: read
 jobs:
   build:
+    name: Windows release readiness
     runs-on: windows-latest
     env:
       CORTEX_RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
@@ -40,6 +42,14 @@ jobs:
           else
             pnpm make
           fi
+      - name: Smoke install, launch, and uninstall
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/desktop/out/make -Recurse -File -Filter '*Setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'No Windows installer was produced.' }
+          ./scripts/smoke-windows-installer.ps1 `
+            -InstallerPath $installer.FullName `
+            -Channel '${{ env.CORTEX_RELEASE_CHANNEL }}'
       - uses: actions/upload-artifact@v4
         with:
           name: cortex-${{ env.CORTEX_RELEASE_CHANNEL }}-windows-unsigned

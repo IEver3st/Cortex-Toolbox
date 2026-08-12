@@ -3,7 +3,8 @@ import {
   type HandlingSetup,
   type HandlingValues,
 } from '@cortex/vehicle-meta';
-import { Search } from 'lucide-react';
+import { BookOpen, Search } from 'lucide-react';
+import { useState } from 'react';
 import { Select } from '../../../components/Select';
 import { Toggle } from '../../../components/UiPrimitives';
 import {
@@ -12,9 +13,12 @@ import {
   presetLabel as formatPresetLabel,
 } from '../chassis-utils';
 import { BehaviorInspector } from '../components/BehaviorInspector';
+import { CategoryPresetControls } from '../components/CategoryPresetControls';
 import { ParameterField } from '../components/ParameterField';
+import { ParameterWikiDialog } from '../components/ParameterWikiDialog';
 import { PresetControls } from '../components/PresetControls';
 import { VectorInputs } from '../components/VectorInputs';
+import type { CategoryPreset } from '../category-presets';
 import type { FieldChange, HandlingWorkbenchCategory, PresetId } from '../types';
 
 const CATEGORY_ORDER: HandlingWorkbenchCategory[] = [
@@ -73,6 +77,7 @@ export function HandlingSection({
   onFieldChange,
   onFieldReset,
   onCategoryReset,
+  onApplyCategoryPreset,
   onSelectPreset,
   onSelectChange,
   onResetField,
@@ -102,6 +107,7 @@ export function HandlingSection({
   onFieldChange: (key: keyof HandlingValues, value: number) => void;
   onFieldReset: (key: keyof HandlingValues) => void;
   onCategoryReset: () => void;
+  onApplyCategoryPreset: (preset: CategoryPreset) => void;
   onSelectPreset: (id: HandlingPresetId) => void;
   onSelectChange: (fieldKey: string) => void;
   onResetField: (fieldKey: string) => void;
@@ -113,6 +119,8 @@ export function HandlingSection({
     value: number,
   ) => void;
 }): React.JSX.Element {
+  const [wikiOpen, setWikiOpen] = useState(false);
+  const [wikiArticleId, setWikiArticleId] = useState<string | null>(null);
   const query = search.trim().toLowerCase();
   const fields = fieldsForWorkbenchCategory(category, true).filter(
     (field) =>
@@ -127,6 +135,10 @@ export function HandlingSection({
   const warningCount = allChanges.filter(
     (change) => change.section === 'handling' || change.section === 'vehicle-setup',
   ).length;
+  const openWiki = (articleId: string | null) => {
+    setWikiArticleId(articleId);
+    setWikiOpen(true);
+  };
 
   return (
     <div
@@ -186,6 +198,14 @@ export function HandlingSection({
             </p>
           </div>
           <div className="chassis-editor-heading-actions">
+            <button
+              type="button"
+              className="chassis-text-action chassis-wiki-open-all"
+              onClick={() => openWiki(visibleFields[0]?.key ?? 'centreOfMass')}
+            >
+              <BookOpen aria-hidden="true" />
+              Search wiki
+            </button>
             <button type="button" className="chassis-text-action" onClick={onCategoryReset}>
               Reset section
             </button>
@@ -199,6 +219,13 @@ export function HandlingSection({
             </button>
           </div>
         </header>
+
+        <CategoryPresetControls
+          category={category}
+          handling={handling}
+          setup={handlingSetup}
+          onApply={onApplyCategoryPreset}
+        />
 
         {category === 'physical' ? (
           <div className="chassis-vector-stack">
@@ -221,6 +248,7 @@ export function HandlingSection({
                 )
               }
               onChange={(axis, value) => onSetupVectorChange('centreOfMass', axis, value)}
+              onOpenWiki={() => openWiki('centreOfMass')}
               onReset={(axis) =>
                 onSetupVectorChange('centreOfMass', axis, savedHandlingSetup.centreOfMass[axis])
               }
@@ -244,6 +272,7 @@ export function HandlingSection({
                 )
               }
               onChange={(axis, value) => onSetupVectorChange('inertiaMultiplier', axis, value)}
+              onOpenWiki={() => openWiki('inertiaMultiplier')}
               onReset={(axis) =>
                 onSetupVectorChange(
                   'inertiaMultiplier',
@@ -269,6 +298,7 @@ export function HandlingSection({
                 aiModified={aiModifiedFields.has(field.key)}
                 onChange={(value) => onFieldChange(field.key, value)}
                 onReset={() => onFieldReset(field.key)}
+                onOpenWiki={() => openWiki(field.key)}
               />
             ))
           )}
@@ -295,6 +325,7 @@ export function HandlingSection({
                 )
               }
               onChange={(axis, value) => onSetupVectorChange('seatOffset', axis, value)}
+              onOpenWiki={() => openWiki('seatOffset')}
               onReset={(axis) =>
                 onSetupVectorChange('seatOffset', axis, savedHandlingSetup.seatOffset[axis])
               }
@@ -394,6 +425,11 @@ export function HandlingSection({
         onSelectChange={onSelectChange}
         onResetField={onResetField}
         onResetCategory={onCategoryReset}
+      />
+      <ParameterWikiDialog
+        open={wikiOpen}
+        initialArticleId={wikiArticleId}
+        onOpenChange={setWikiOpen}
       />
     </div>
   );

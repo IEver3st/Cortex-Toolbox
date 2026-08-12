@@ -10,6 +10,10 @@ const browserOnly = () =>
     recovery: 'Run pnpm dev and use the Cortex window for filesystem access.',
   });
 
+function browserSystemColorMode(): 'light' | 'dark' {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 const emptySummary = {
   files: 0,
   bytes: 0,
@@ -72,6 +76,7 @@ export function installBrowserDevShim(): void {
       recent: async () => ok([]),
       recentDetails: async () => ok([]),
       openFolder: async () => browserOnly(),
+      openDropped: async () => browserOnly(),
       import: async () => browserOnly(),
       removeRecent: async () => ok(true),
       reveal: async () => ok(true),
@@ -172,6 +177,14 @@ export function installBrowserDevShim(): void {
       recordClientError: async () => ok(true),
     },
     system: {
+      colorScheme: async () => ok(browserSystemColorMode()),
+      onColorSchemeChanged: (listener) => {
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const sync = () => listener(media.matches ? 'dark' : 'light');
+        media.addEventListener('change', sync);
+        sync();
+        return () => media.removeEventListener('change', sync);
+      },
       window: async () => ok(true),
       openExternal: async ({ url }) => {
         window.open(url, '_blank', 'noopener,noreferrer');

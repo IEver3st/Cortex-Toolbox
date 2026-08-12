@@ -431,17 +431,25 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
   };
 
   const beginResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const startX = event.clientX;
-    const startWidth = width;
-    let latestWidth = startWidth;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const panelRight = handle.parentElement?.getBoundingClientRect().right ?? window.innerWidth;
+    let latestWidth = width;
+    const widthAt = (clientX: number) => Math.max(320, Math.min(720, panelRight - clientX));
     const move = (moveEvent: PointerEvent) => {
-      latestWidth = Math.max(320, Math.min(720, startWidth + startX - moveEvent.clientX));
+      if (moveEvent.pointerId !== pointerId) return;
+      latestWidth = widthAt(moveEvent.clientX);
       setWidth(latestWidth);
     };
-    const finish = () => {
+    const finish = (finishEvent: PointerEvent) => {
+      if (finishEvent.pointerId !== pointerId) return;
+      if (finishEvent.type !== 'pointercancel') latestWidth = widthAt(finishEvent.clientX);
+      setWidth(latestWidth);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
       if (!preferences) return;
       void (async () => {
         const next = normalizePreferences({
@@ -453,7 +461,13 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
       })();
     };
     window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', finish, { once: true });
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    try {
+      handle.setPointerCapture(pointerId);
+    } catch {
+      // Window listeners keep mouse and pen resizing reliable when synthetic input cannot capture.
+    }
   };
 
   if (!panelOpen || !preferences?.aiEnabled || !workspaceRoot) return null;
@@ -481,7 +495,7 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
     const used = entitled && accountAi.usage.state === 'used';
     return (
       <aside
-        className="ai-workspace-panel"
+        className="ai-workspace-panel is-access-gate"
         style={{ '--ai-panel-width': `${width}px`, width } as CSSProperties}
         aria-label="Cortex AI workspace panel"
       >
@@ -533,7 +547,7 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
                     : 'Try again in a moment. Nothing in your workspace was changed.'}
           </p>
           {account ? (
-            <div>
+            <div className="ai-commercial-actions">
               {!signedIn ? (
                 <ActionButton
                   variant="primary"
@@ -546,7 +560,7 @@ export default function AiWorkspacePanel(): React.JSX.Element | null {
                 </ActionButton>
               ) : !entitled ? (
                 <ActionButton variant="primary" onClick={openAccount}>
-                  View plans
+                  Choose a plan
                 </ActionButton>
               ) : used && account.plan === 'creator' ? (
                 <ActionButton variant="primary" onClick={openAccount}>

@@ -7,6 +7,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  nativeTheme,
   shell,
   type IpcMainInvokeEvent,
   type OpenDialogOptions,
@@ -27,6 +28,7 @@ import {
   auditResource,
   createPackagePlan,
   evaluateReleaseGate,
+  findMissingManifestReferences,
   type PackageEntry,
 } from '@cortex/resource-parser';
 import { analysisMarkdown } from '@cortex/script-analysis';
@@ -62,6 +64,7 @@ import { resolveAiWorkspaceFile } from './ai/workspace-sandbox';
 import type { CortexAuthService } from './auth-service';
 import { applyTextWriteTransaction } from './ai/write-transaction';
 import { removeLegacyAiCredential } from './ai/secure-storage';
+import { resolveAuthorizedProjectPath } from './project-path-authorization';
 
 const workspace = new WorkspaceService();
 const jobs = new JobQueue();
@@ -458,6 +461,7 @@ async function planPackage(
     hasParsedManifest: parsed != null,
     hasFxVersion: Boolean(parsed?.fxVersion),
     hasGame: Boolean(parsed?.game),
+    missingManifestReferences: parsed ? findMissingManifestReferences(entries, parsed) : [],
   });
   return { entries, gate };
 }
@@ -585,8 +589,20 @@ export function registerIpc(
   register(
     channels.projectsOpenFolder,
     async (_event, request) =>
+      guarded(async () => {
+        const root = await resolveAuthorizedProjectPath(
+          request.root,
+          workspace.current()?.root ?? null,
+          settings.get('recentWorkspaces').map((entry) => entry.root),
+        );
+        return openWorkspaceRoot(root);
+      }, 'WORKSPACE_OPEN_FAILED') as Promise<IpcResponse<'projects:open-folder'>>,
+  );
+  register(
+    channels.projectsOpenDropped,
+    async (_event, request) =>
       guarded(() => openWorkspaceRoot(request.root), 'WORKSPACE_OPEN_FAILED') as Promise<
-        IpcResponse<'projects:open-folder'>
+        IpcResponse<'projects:open-dropped'>
       >,
   );
   register(channels.projectsImport, async (event) => {
@@ -613,7 +629,11 @@ export function registerIpc(
   });
   register(channels.projectsReveal, async (_event, request) => {
     try {
-      const target = path.resolve(request.root);
+      const target = await resolveAuthorizedProjectPath(
+        request.root,
+        workspace.current()?.root ?? null,
+        settings.get('recentWorkspaces').map((entry) => entry.root),
+      );
       const info = await stat(target);
       if (info.isDirectory()) {
         const error = await shell.openPath(target);
@@ -741,7 +761,9 @@ export function registerIpc(
         const active = workspace.require();
         const relativePath = active.manifestName ?? 'fxmanifest.lua';
         const plan = await planTextWrite(active.root, relativePath, request.source);
-        rememberPendingPlan(plan, active.root, relativePath, request.source);
+        rememberPendingPlan(plan, active.root, relativePath, request.source, {
+          allowCreate: active.manifestName === null,
+        });
         return plan;
       }, 'CHANGE_PLAN_FAILED') as Promise<IpcResponse<'manifest:plan'>>,
   );
@@ -1115,6 +1137,9 @@ export function registerIpc(
     );
     return ok(true);
   });
+  register(channels.systemColorScheme, () =>
+    ok(nativeTheme.shouldUseDarkColors ? ('dark' as const) : ('light' as const)),
+  );
   register(channels.systemWindow, (event, request) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return ok(false);
