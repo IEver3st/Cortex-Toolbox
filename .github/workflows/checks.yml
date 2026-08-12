@@ -21,4 +21,16 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
-      - run: pnpm build
+      - name: Build
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm build; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "Build attempt $attempt failed; retrying the external Electron download."
+            sleep $((attempt * 5))
+          done

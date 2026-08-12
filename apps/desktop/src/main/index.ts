@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { app, BrowserWindow, nativeImage, nativeTheme, session } from 'electron';
+import squirrelStartup from 'electron-squirrel-startup';
 import pino from 'pino';
 import { brandingForChannel, iconBaseNameForReleaseBranch } from '../shared/branding';
 import { systemColorSchemeChanged, type SystemColorMode } from '../shared/contracts';
@@ -38,7 +39,7 @@ const csp = isDevelopment
 let primaryWindow: BrowserWindow | null = null;
 let pendingAuthUrl: string | null = findAuthUrl(process.argv);
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const hasSingleInstanceLock = !squirrelStartup && app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
 } else if (process.defaultApp) {
