@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleModelInfoVarGlobal>
+  <Kits>
+    <Item>
+      <kitName>2100_cortex_viper_modkit</kitNam>
+      <id value="2100" />
+      <kitType>MKT_STANDARD</kitType>
+      <visibleMods />
+      <linkMods />
+      <statMods />
+      <slotNames />
+      <liveryNames>
+        <Item>CORTEX_LIVERY_0</Item>
+        <Item>CORTEX_LIVERY_1</Item>
+      </liveryNames>
+    </Item>
+  </Kits>
+  <Lights>
+    <Item>
+      <id value="0" />
+      <indicator>
+        <intensity value="1.000000" />
+        <falloffMax value="8.000000" />
+        <falloffExponent value="16.000000" />
+        <innerConeAngle value="20.000000" />
+        <outerConeAngle value="35.000000" />
+        <emmissiveBoost value="false" />
+        <color value="0xFFFF6A00" />
+      </indicator>
+    </Item>
+  </Lights>
+</CVehicleModelInfoVarGlobal>

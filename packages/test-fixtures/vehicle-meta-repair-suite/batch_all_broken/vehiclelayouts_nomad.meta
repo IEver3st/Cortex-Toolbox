@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleMetadata>
+  <SeatInfos>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_NOMAD_DRIVER</Name>
+      <SeatBoneName>seat_dside_f</SeatBoneName>
+      <ShuffleLink>SEAT_NOMAD_PASSENGER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_NOMAD_PASSENGER</Name>
+      <SeatBoneName>seat_pside_f</SeatBoneName>
+      <ShuffleLink>SEAT_NOMAD_COPILOT</ShuffleLink>
+    </Item>
+  </SeatInfos>
+  <SeatAnimInfos>
+    <Item type="CVehicleSeatAnimInfo">
+      <Name>Cortex Nomad Driver &amp; Passenger</Name>
+      <DriveByInfo>DRIVEBY_STANDARD_FRONT_LEFT</DriveByInfo>
+    </Item>
+  </SeatAnimInfos>
+  <VehicleLayouts>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_NOMAD</Name>
+      <Seats>
+        <Item>SEAT_NOMAD_DRIVER</Item>
+        <Item>SEAT_NOMAD_PASSENGER</Item>
+      </Seats>
+    </Item>
+  </VehicleLayouts>
+</CVehicleMetadata>

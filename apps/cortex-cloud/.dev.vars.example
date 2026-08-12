@@ -1,0 +1,23 @@
+# Local Cortex Cloud bindings. Copy to .dev.vars and keep real values private.
+# Secret: provider credential (Cloudflare secret in production).
+OPENROUTER_API_KEY=
+# Deployment configuration: public client coordinate, not an API secret.
+WORKOS_CLIENT_ID=
+WORKOS_ISSUER=https://api.workos.com/
+# Secrets: Stripe server credential and webhook signing secret.
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+# Deployment configuration: use Stripe test-mode objects for local development.
+STRIPE_CREATOR_PRODUCT_ID=
+STRIPE_PRO_PRODUCT_ID=
+STRIPE_CREATOR_MONTHLY_PRICE_ID=
+STRIPE_CREATOR_ANNUAL_PRICE_ID=
+STRIPE_PRO_MONTHLY_PRICE_ID=
+STRIPE_PRO_ANNUAL_PRICE_ID=
+STRIPE_PORTAL_CONFIGURATION_ID=
+BILLING_RETURN_URL=http://127.0.0.1:5180/
+# Safe local defaults. Enable commercial services only with test/sandbox values.
+CORTEX_AI_ENABLED=false
+AI_PROVIDER_ENABLED=false
+CORTEX_FREE_ONLY=true
+STRIPE_RECONCILE_AFTER_SECONDS=900

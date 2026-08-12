@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Cortex ToolBox Developer">
+  <defs>
+    <pattern id="grid" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#5B8FD4" stroke-width="1" opacity="0.45"/>
+    </pattern>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3D6FA8"/>
+      <stop offset="100%" stop-color="#2F5F96"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#1A2B45"/>
+  <rect x="14" y="14" width="228" height="228" rx="48" fill="url(#face)" stroke="#142238" stroke-width="6"/>
+  <rect x="22" y="22" width="212" height="212" rx="42" fill="url(#grid)"/>
+  <path
+    fill="none"
+    stroke="#F4F7FB"
+    stroke-width="18"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+    d="M168 78c-11-10-25-16-41-16-35 0-63 28-63 63s28 63 63 63c16 0 30-6 41-16"
+  />
+</svg>

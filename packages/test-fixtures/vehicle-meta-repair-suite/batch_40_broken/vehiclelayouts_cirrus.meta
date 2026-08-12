@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleMetadata>
+  <SeatInfos>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_CIRRUS_DRIVER</Name>
+      <SeatBoneName>seat_dside_f</SeatBoneName>
+      <ShuffleLink>SEAT_CIRRUS_PASSENGER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_CIRRUS_PASSENGER</Name>
+      <SeatBoneName>seat_pside_f</SeatBoneName>
+      <ShuffleLink>SEAT_CIRRUS_PASSENGER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_CIRRUS_REAR</Name>
+      <SeatBoneName>seat_dside_r</SeatBoneName>
+      <ShuffleLink>SEAT_CIRRUS_PASSENGER</ShuffleLink>
+    </Item>
+  </SeatInfos>
+  <SeatAnimInfos>
+    <Item type="CVehicleSeatAnimInfo">
+      <Name>Cortex Cirrus Driver</Name>
+      <DriveByInfo>DRIVEBY_STANDARD_FRONT_LEFT</DriveByInfo>
+    </Item>
+  </SeatAnimInfos>
+  <VehicleLayouts>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_CIRRUS</Name>
+      <Seats>
+        <Item>SEAT_CIRRUS_DRIVER</Item>
+        <Item>SEAT_CIRRUS_PASSENGER</Item>
+      </Seats>
+    </Item>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_CIRRUS_REAR</Name>
+      <Seats>
+        <Item>SEAT_CIRRUS_REAR</Item>
+      </Seats>
+    </Item>
+  </VehicleLayouts>
+</CVehicleMetadata>

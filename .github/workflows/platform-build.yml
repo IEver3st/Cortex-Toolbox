@@ -1,0 +1,47 @@
+name: Platform build matrix
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel to package
+        required: true
+        default: stable
+        type: choice
+        options: [stable, beta]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      CORTEX_RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
+      CORTEX_GITHUB_OWNER: ${{ github.repository_owner }}
+      CORTEX_GITHUB_REPOSITORY: ${{ github.event.repository.name }}
+      CORTEX_ENABLE_AUTO_UPDATE: 'true'
+      CORTEX_WORKOS_CLIENT_ID: ${{ vars.CORTEX_WORKOS_CLIENT_ID }}
+      CORTEX_CLOUD_API_URL: ${{ vars.CORTEX_CLOUD_API_URL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm security:scan
+      - run: pnpm audit --audit-level high
+      - run: pnpm icons
+      - name: Package Windows installer
+        shell: bash
+        run: |
+          if [ "${CORTEX_RELEASE_CHANNEL}" = "beta" ]; then
+            pnpm make:beta
+          else
+            pnpm make
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cortex-${{ env.CORTEX_RELEASE_CHANNEL }}-windows-unsigned
+          path: apps/desktop/out/make/**/*
+          if-no-files-found: error

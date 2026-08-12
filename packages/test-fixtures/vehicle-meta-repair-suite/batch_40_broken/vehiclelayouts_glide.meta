@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleMetadata>
+  <SeatInfos>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_GLIDE_DRIVER</Name>
+      <SeatBoneName>seat_dside_f</SeatBoneName>
+      <ShuffleLink>SEAT_GLIDE_PASSENGER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_GLIDE_PASSENGER</Name>
+      <SeatBoneName>seat_pside_f</SeatBoneName>
+      <ShuffleLink>SEAT_GLIDE_DRIVER</ShuffleLink>
+    </Item>
+    <Item type="CVehicleSeatInfo">
+      <Name>SEAT_GLIDE_REAR</Name>
+      <SeatBoneName>seat_dside_r</SeatBoneName>
+      <ShuffleLink>SEAT_GLIDE_PASSENGER</ShuffleLink>
+    </Item>
+  </SeatInfos>
+  <SeatAnimInfos>
+    <Item type="CVehicleSeatAnimInfo">
+      <Name>Cortex Glide Driver</Name>
+      <DriveByInfo>DRIVEBY_STANDARD_FRONT_LEFT</DriveByInfo>
+    </Item>
+  </SeatAnimInfos>
+  <VehicleLayouts>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_GLIDE</Name>
+      <Seats>
+        <Item>SEAT_GLIDE_DRIVER</Item>
+        <Item>SEAT_GLIDE_PASSENGER</Item>
+      </Seats>
+    </Item>
+    <Item type="CVehicleLayoutInfo">
+      <Name>LAYOUT_CORTEX_GLIDE</Name>
+      <Seats>
+        <Item>SEAT_GLIDE_REAR</Item>
+      </Seats>
+    </Item>
+  </VehicleLayouts>
+</CVehicleMetadata>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CVehicleModelInfoVarGlobal>
+  <Kits>
+    <Item>
+      <kitName>1000_cortex_test_modkit</kitName>
+      <id value="1000" />
+      <kitType>MKT_STANDARD</kitType>
+      <visibleMods />
+      <linkMods />
+      <statMods />
+      <slotNames />
+      <liveryNames />
+    </Item>
+  </Kits>
+  <Lights />
+</CVehicleModelInfoVarGlobal>

@@ -1,0 +1,58 @@
+[
+  {
+    "case": "01_carcols_missing_self_close",
+    "broken_xml_parses": false,
+    "fixed_xml_parses": true,
+    "parser_error": "mismatched tag: line 13, column 6",
+    "exact_changed_lines": [6]
+  },
+  {
+    "case": "02_carvariations_missing_closing_bracket",
+    "broken_xml_parses": false,
+    "fixed_xml_parses": true,
+    "parser_error": "not well-formed (invalid token): line 6, column 6",
+    "exact_changed_lines": [5]
+  },
+  {
+    "case": "03_handling_unclosed_attribute_quote",
+    "broken_xml_parses": false,
+    "fixed_xml_parses": true,
+    "parser_error": "not well-formed (invalid token): line 7, column 6",
+    "exact_changed_lines": [6]
+  },
+  {
+    "case": "04_vehicles_mismatched_closing_tag",
+    "broken_xml_parses": false,
+    "fixed_xml_parses": true,
+    "parser_error": "mismatched tag: line 8, column 28",
+    "exact_changed_lines": [8]
+  },
+  {
+    "case": "05_vehiclelayouts_unescaped_ampersand",
+    "broken_xml_parses": false,
+    "fixed_xml_parses": true,
+    "parser_error": "not well-formed (invalid token): line 17, column 27",
+    "exact_changed_lines": [17]
+  },
+  {
+    "case": "06_handling_invalid_numeric_value",
+    "broken_xml_parses": true,
+    "fixed_xml_parses": true,
+    "parser_error": "",
+    "exact_changed_lines": [13]
+  },
+  {
+    "case": "07_vehicles_handling_id_mismatch",
+    "broken_xml_parses": true,
+    "fixed_xml_parses": true,
+    "parser_error": "",
+    "exact_changed_lines": [9]
+  },
+  {
+    "case": "08_carvariations_modkit_mismatch",
+    "broken_xml_parses": true,
+    "fixed_xml_parses": true,
+    "parser_error": "",
+    "exact_changed_lines": [15]
+  }
+]
