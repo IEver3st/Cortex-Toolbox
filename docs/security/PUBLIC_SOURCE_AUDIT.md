@@ -100,7 +100,7 @@ The release workflow can materialise an optional P12 certificate from a GitHub A
 - Disabled production main, preload, and renderer source maps.
 - Expanded diagnostic redaction and tests.
 - Hardened `.gitignore`, safe examples, deployment documentation, README guidance, and `SECURITY.md` incident response.
-- Added local/staged/CI public-source scanning, full-history Gitleaks on pull requests/main/release tags, and scanner/audit gates in manual and tagged packaging workflows.
+- Added local/staged/CI public-source scanning, a checksum-pinned full-history Gitleaks CLI scan on pull requests/main/release tags, and scanner/audit gates in manual and tagged packaging workflows.
 - Upgraded vulnerable direct dependencies and pinned patched transitive versions until upstream toolchains adopt them.
 - Created and verified an offline pre-rewrite Git bundle outside the repository.
 - Atomically replaced `main`, `v1.0.0`, and the PR branch with a lease-protected sanitized root commit.
