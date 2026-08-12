@@ -35,7 +35,7 @@
     "@cortex/script-analysis": "workspace:*",
     "@cortex/vehicle-meta": "workspace:*",
     "@electron-forge/plugin-vite": "7.11.2",
-    "@radix-ui/react-dialog": "1.1.19",
+    "@radix-ui/react-dialog": "1.1.23",
     "@tailwindcss/vite": "4.3.2",
     "@tanstack/react-query": "5.101.2",
     "@workos-inc/node": "10.9.0",
