@@ -3,10 +3,13 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
-    open-pull-requests-limit: 10
+    # Pause scheduled version-update PRs. Dependabot vulnerability alerts and
+    # security updates remain enabled in repository settings.
+    open-pull-requests-limit: 0
     groups:
       electron-toolchain: { patterns: ['electron', '@electron-forge/*'] }
       testing: { patterns: ['vitest', '@testing-library/*', '@playwright/*', 'playwright'] }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    open-pull-requests-limit: 0
