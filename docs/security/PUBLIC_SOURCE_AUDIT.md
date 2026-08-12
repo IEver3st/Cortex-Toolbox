@@ -106,6 +106,7 @@ The release workflow can materialise an optional P12 certificate from a GitHub A
 - Atomically replaced `main`, `v1.0.0`, and the PR branch with a lease-protected sanitized root commit.
 - Quarantined the pre-hardening `v1.0.0` binaries by converting the release to a draft.
 - Deleted 132 pre-rewrite GitHub Actions runs, which removed 17 active pre-hardening artifacts and their associated logs while retaining seven green sanitized-root runs.
+- Disabled the SBOM action's implicit artifact/release uploads so release publication occurs only through the explicit, dependency-gated publish job.
 
 ## Credentials requiring rotation
 

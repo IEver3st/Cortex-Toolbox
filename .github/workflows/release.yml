@@ -63,6 +63,8 @@ jobs:
           path: apps/desktop/out/make
           format: cyclonedx-json
           output-file: apps/desktop/out/make/cortex-windows.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
       - name: Generate checksums
         shell: pwsh
         run: Get-ChildItem apps/desktop/out/make -File -Recurse | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Replace((Resolve-Path .).Path + '\', ''))" } | Set-Content apps/desktop/out/make/SHA256SUMS-Windows.txt
