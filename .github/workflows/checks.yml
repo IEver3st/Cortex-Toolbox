@@ -73,10 +73,10 @@ jobs:
           runtime = Path('apps/cortex-cloud/src/runtime-config.test.ts')
           runtime_text = runtime.read_text(encoding='utf-8')
           price_replacements = {
-              'price_creator_month': 'price_creatorMonth',
-              'price_creator_year': 'price_creatorYear',
-              'price_pro_month': 'price_proMonth',
-              'price_pro_year': 'price_proYear',
+              'price_creator_month': 'price_t1',
+              'price_creator_year': 'price_t2',
+              'price_pro_month': 'price_t3',
+              'price_pro_year': 'price_t4',
           }
           for old, new in price_replacements.items():
               if runtime_text.count(old) != 1:
