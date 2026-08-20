@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => {
     }),
     authenticateCode: vi.fn(),
     refresh: vi.fn(),
+    hostedMe: vi.fn(),
+    hostedCheckout: vi.fn(),
+    hostedPortal: vi.fn(),
   };
 });
 
@@ -44,6 +47,36 @@ vi.mock('./ai/secure-storage', () => ({
   },
 }));
 
+vi.mock('./ai/hosted-client', () => {
+  class CortexHostedResponseError extends Error {
+    constructor(
+      readonly status: number,
+      readonly detail: string,
+    ) {
+      super(status === 401 ? 'Sign in to use Cortex AI.' : detail);
+      this.name = 'CortexHostedResponseError';
+    }
+  }
+
+  return {
+    CortexHostedResponseError,
+    CortexHostedClient: class {
+      me() {
+        return mocks.hostedMe() as unknown;
+      }
+
+      checkout(plan: 'creator' | 'pro', interval: 'month' | 'year') {
+        return mocks.hostedCheckout(plan, interval) as unknown;
+      }
+
+      portal() {
+        return mocks.hostedPortal() as unknown;
+      }
+    },
+  };
+});
+
+import { CortexHostedResponseError } from './ai/hosted-client';
 import { CortexAuthService } from './auth-service';
 
 const USER = {
@@ -83,6 +116,23 @@ describe('WorkOS native public-client session', () => {
       accessToken: token({ exp: 4_000_000_000, sid: 'session_01' }),
       refreshToken: 'refresh_01',
       user: USER,
+    });
+    mocks.hostedMe.mockResolvedValue({
+      plan: 'free',
+      billing: {
+        interval: null,
+        subscriptionStatus: 'none',
+        cancelAtPeriodEnd: false,
+        renewsAt: null,
+        stripeCustomerPresent: false,
+        paymentFailed: false,
+      },
+      ai: {
+        entitled: false,
+        enabled: false,
+        usage: { percent: 0, state: 'used', resetsAt: null },
+        limits: { concurrentRuns: 0 },
+      },
     });
   });
 
@@ -209,6 +259,30 @@ describe('WorkOS native public-client session', () => {
       message: 'This Cortex session belongs to a different build. Sign in again.',
     });
     expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.secrets.has('workos-session')).toBe(false);
+  });
+
+  it('expires a locally valid session when Cortex Cloud rejects it', async () => {
+    mocks.secrets.set(
+      'workos-session',
+      JSON.stringify({
+        accessToken: token({ exp: 4_000_000_000, sid: 'session_01' }),
+        refreshToken: 'refresh_01',
+        user: USER,
+      }),
+    );
+    mocks.hostedMe.mockRejectedValue(
+      new CortexHostedResponseError(401, 'Your Cortex session expired. Sign in again.'),
+    );
+    const service = new CortexAuthService(
+      env({ CORTEX_CLOUD_API_URL: 'https://cortex.example.test' }),
+    );
+
+    await expect(service.status()).resolves.toMatchObject({
+      status: 'expired',
+      identity: null,
+      message: 'Cortex Cloud rejected this session. Sign in again.',
+    });
     expect(mocks.secrets.has('workos-session')).toBe(false);
   });
 });

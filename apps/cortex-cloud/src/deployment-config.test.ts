@@ -14,6 +14,7 @@ const productionEnvironment = {
   STRIPE_CREATOR_ANNUAL_PRICE_ID: 'price_ca',
   STRIPE_PRO_MONTHLY_PRICE_ID: 'price_pm',
   STRIPE_PRO_ANNUAL_PRICE_ID: 'price_pa',
+  STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_cortex',
   BILLING_RETURN_URL: 'https://billing.example.test/account',
   CORTEX_AI_ENABLED: 'true',
   AI_PROVIDER_ENABLED: 'true',
@@ -30,9 +31,19 @@ describe('public and production Worker configuration', () => {
     expect(validateProductionConfig(generated)).toEqual([]);
     expect(generated).toContain('database_id =');
     expect(generated).toContain('CORTEX_FREE_ONLY = "false"');
+    expect(generated).toContain('STRIPE_PORTAL_CONFIGURATION_ID = "bpc_cortex"');
     expect(generated).not.toContain('OPENROUTER_API_KEY');
     expect(generated).not.toContain('STRIPE_SECRET_KEY');
     expect(generated).not.toContain('STRIPE_WEBHOOK_SECRET');
+  });
+
+  it('requires a restricted Stripe portal identifier for production', () => {
+    expect(() =>
+      createProductionConfig({
+        ...productionEnvironment,
+        STRIPE_PORTAL_CONFIGURATION_ID: '',
+      }),
+    ).toThrow('STRIPE_PORTAL_CONFIGURATION_ID');
   });
 
   it('names missing deployment variables without revealing any supplied value', () => {

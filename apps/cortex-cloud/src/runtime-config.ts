@@ -16,6 +16,10 @@ const stripePriceId = z
   .string()
   .trim()
   .regex(/^price_[A-Za-z0-9]+$/);
+const stripePortalConfigurationId = z
+  .string()
+  .trim()
+  .regex(/^bpc_[A-Za-z0-9]+$/);
 
 export function isFreeOnly(env: Env): boolean {
   return booleanValue(env.CORTEX_FREE_ONLY, true);
@@ -42,11 +46,20 @@ export function requireAiProviderConfig(env: Env): { apiKey: string } {
   };
 }
 
+export function requireStripeSecretKey(env: Env): string {
+  return required('STRIPE_SECRET_KEY', env.STRIPE_SECRET_KEY, z.string().trim().min(1));
+}
+
 export function requireBillingConfig(env: Env) {
   const prices = requirePriceConfig(env);
   return {
-    secretKey: required('STRIPE_SECRET_KEY', env.STRIPE_SECRET_KEY, z.string().trim().min(1)),
+    secretKey: requireStripeSecretKey(env),
     returnUrl: required('BILLING_RETURN_URL', env.BILLING_RETURN_URL, httpsUrl),
+    portalConfigurationId: required(
+      'STRIPE_PORTAL_CONFIGURATION_ID',
+      env.STRIPE_PORTAL_CONFIGURATION_ID,
+      stripePortalConfigurationId,
+    ),
     prices,
   };
 }

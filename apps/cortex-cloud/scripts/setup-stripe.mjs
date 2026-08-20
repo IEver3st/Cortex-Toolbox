@@ -1,7 +1,4 @@
-const PRODUCTS = {
-  creator: required(process.env.STRIPE_CREATOR_PRODUCT_ID, 'Set STRIPE_CREATOR_PRODUCT_ID.'),
-  pro: required(process.env.STRIPE_PRO_PRODUCT_ID, 'Set STRIPE_PRO_PRODUCT_ID.'),
-};
+const PLANS = /** @type {const} */ (['creator', 'pro']);
 
 /** @type {Array<{plan: 'creator' | 'pro', interval: 'month' | 'year', variable: string, expectedAmount: number}>} */
 const PRICES = [
@@ -27,6 +24,8 @@ const secret = required(
 );
 /** @type {Array<{plan: 'creator' | 'pro', interval: 'month' | 'year', id: string}>} */
 const resolved = [];
+/** @type {Map<'creator' | 'pro', string>} */
+const products = new Map();
 
 for (const policy of PRICES) {
   const id = required(process.env[policy.variable], `Set ${policy.variable}.`);
@@ -35,8 +34,8 @@ for (const policy of PRICES) {
   const productId =
     typeof productValue === 'string' ? productValue : recordString(productValue, 'id');
   const recurring = record(price.recurring);
-  if (price.active !== true || productId !== PRODUCTS[policy.plan]) {
-    throw new Error(`${id} is not an active ${policy.plan} price on the expected product.`);
+  if (price.active !== true || !productId?.startsWith('prod_')) {
+    throw new Error(`${id} is not an active recurring price on a Stripe product.`);
   }
   if (
     price.currency !== 'usd' ||
@@ -47,8 +46,37 @@ for (const policy of PRICES) {
       `${id} does not match the approved ${policy.plan}/${policy.interval} amount and cadence.`,
     );
   }
+  const existingProduct = products.get(policy.plan);
+  if (existingProduct && existingProduct !== productId) {
+    throw new Error(`The ${policy.plan} monthly and annual prices use different products.`);
+  }
+  products.set(policy.plan, productId);
   resolved.push({ plan: policy.plan, interval: policy.interval, id });
   console.log(`Verified configured ${policy.plan}/${policy.interval} price.`);
+}
+
+const creatorProduct = required(
+  products.get('creator'),
+  'The Creator product could not be resolved.',
+);
+const proProduct = required(products.get('pro'), 'The Pro product could not be resolved.');
+if (creatorProduct === proProduct) {
+  throw new Error('Creator and Pro must use separate Stripe products.');
+}
+
+for (const plan of PLANS) {
+  const productId = required(products.get(plan), `The ${plan} product could not be resolved.`);
+  const product = await stripe('GET', `/v1/products/${encodeURIComponent(productId)}`);
+  const metadata = record(product.metadata);
+  if (
+    product.active !== true ||
+    recordString(metadata, 'app') !== 'cortex-toolbox' ||
+    recordString(metadata, 'entitlement') !== 'cortex_ai' ||
+    recordString(metadata, 'plan') !== plan
+  ) {
+    throw new Error(`${productId} is not the approved active Cortex AI ${plan} product.`);
+  }
+  console.log(`Verified configured ${plan} product metadata.`);
 }
 
 if (!process.argv.includes('--apply-portal')) {
@@ -74,15 +102,23 @@ const form = new URLSearchParams({
   'features[subscription_update][default_allowed_updates][0]': 'price',
 });
 
-for (const [index, product] of Object.values(PRODUCTS).entries()) {
+for (const [index, plan] of PLANS.entries()) {
+  const product = required(products.get(plan), `The ${plan} product could not be resolved.`);
   form.set(`features[subscription_update][products][${index}][product]`, product);
-  const ids = resolved.filter((price) => PRODUCTS[price.plan] === product).map((price) => price.id);
-  ids.forEach((id, priceIndex) => {
-    form.set(`features[subscription_update][products][${index}][prices][${priceIndex}]`, id);
-  });
+  resolved
+    .filter((price) => price.plan === plan)
+    .forEach((price, priceIndex) => {
+      form.set(
+        `features[subscription_update][products][${index}][prices][${priceIndex}]`,
+        price.id,
+      );
+    });
 }
 
 const configurationId = process.env.STRIPE_PORTAL_CONFIGURATION_ID;
+if (configurationId && !/^bpc_[A-Za-z0-9]+$/.test(configurationId)) {
+  throw new Error('STRIPE_PORTAL_CONFIGURATION_ID must be a Stripe bpc_ identifier.');
+}
 const configuration = await stripe(
   'POST',
   configurationId
@@ -137,8 +173,8 @@ function requiredString(value, message) {
   return value;
 }
 
-/** @param {string | undefined} value @param {string} message */
+/** @template T @param {T | null | undefined} value @param {string} message @returns {T} */
 function required(value, message) {
-  if (!value) throw new Error(message);
+  if (value === null || value === undefined || value === '') throw new Error(message);
   return value;
 }

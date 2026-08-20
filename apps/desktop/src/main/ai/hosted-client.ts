@@ -48,6 +48,16 @@ interface HostedCompletionChoice {
   message?: { content?: string | null; tool_calls?: HostedToolCall[] };
 }
 
+export class CortexHostedResponseError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(productErrorForHostedResponse(status, detail));
+    this.name = 'CortexHostedResponseError';
+  }
+}
+
 export class CortexHostedClient {
   constructor(
     private readonly baseUrl: string,
@@ -184,7 +194,7 @@ export class CortexHostedClient {
       } catch {
         // Keep the bounded response text when the service did not return JSON.
       }
-      throw new Error(productErrorForHostedResponse(response.status, message));
+      throw new CortexHostedResponseError(response.status, message);
     }
     return response;
   }

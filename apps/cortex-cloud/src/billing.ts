@@ -8,7 +8,7 @@ import {
   type AccountRow,
 } from './db';
 import type { Env } from './env';
-import { requireBillingConfig, requirePriceConfig } from './runtime-config';
+import { requireBillingConfig, requirePriceConfig, requireStripeSecretKey } from './runtime-config';
 
 class StripeApiError extends HttpError {
   constructor(readonly stripeStatus: number) {
@@ -131,10 +131,11 @@ export async function createCheckout(
 export async function createPortal(env: Env, customerId: string | null): Promise<string> {
   if (!customerId) throw new HttpError(409, 'No Stripe customer is linked to this account.');
   const billingConfig = requireBillingConfig(env);
-  const body = new URLSearchParams({ customer: customerId, return_url: billingConfig.returnUrl });
-  if (env.STRIPE_PORTAL_CONFIGURATION_ID) {
-    body.set('configuration', env.STRIPE_PORTAL_CONFIGURATION_ID);
-  }
+  const body = new URLSearchParams({
+    customer: customerId,
+    return_url: billingConfig.returnUrl,
+    configuration: billingConfig.portalConfigurationId,
+  });
   const payload = await stripeRequest(env, 'POST', '/v1/billing_portal/sessions', body);
   if (typeof payload.url !== 'string') {
     throw new HttpError(502, 'Stripe did not return the billing portal.');
@@ -149,7 +150,7 @@ async function stripeRequest(
   body?: URLSearchParams,
   idempotencyKey?: string,
 ): Promise<Record<string, unknown>> {
-  const { secretKey } = requireBillingConfig(env);
+  const secretKey = requireStripeSecretKey(env);
   const query = method === 'GET' && body ? `?${body.toString()}` : '';
   const response = await fetch(`https://api.stripe.com${route}${query}`, {
     method,

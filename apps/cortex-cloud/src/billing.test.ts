@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { policyForPrice, priceForSelection, pricePolicies, verifyStripeSignature } from './billing';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createPortal,
+  policyForPrice,
+  priceForSelection,
+  pricePolicies,
+  verifyStripeSignature,
+} from './billing';
 import {
   dollarsToMicrousd,
   normalizeBillingStatus,
@@ -15,6 +21,15 @@ const env = {
   STRIPE_PRO_MONTHLY_PRICE_ID: 'price_t3',
   STRIPE_PRO_ANNUAL_PRICE_ID: 'price_t4',
 } as Env;
+
+const billingEnv = {
+  ...env,
+  STRIPE_SECRET_KEY: 'stripe-test-key',
+  STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_cortex',
+  BILLING_RETURN_URL: 'https://billing.example.test/account',
+} as Env;
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('Stripe entitlement authority', () => {
   it('maps all four server-owned plan selections to the approved prices', () => {
@@ -43,6 +58,30 @@ describe('Stripe entitlement authority', () => {
     expect(() => pricePolicies({ ...env, STRIPE_CREATOR_MONTHLY_PRICE_ID: '' })).toThrow(
       'STRIPE_CREATOR_MONTHLY_PRICE_ID',
     );
+  });
+
+  it('pins every Customer Portal session to the restricted configuration', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://billing.stripe.test/session' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(createPortal(billingEnv, 'cus_cortex')).resolves.toBe(
+      'https://billing.stripe.test/session',
+    );
+    const request = fetchMock.mock.calls[0]?.[1];
+    expect(request?.body).toBeInstanceOf(URLSearchParams);
+    expect((request?.body as URLSearchParams).get('configuration')).toBe('bpc_cortex');
+  });
+
+  it('fails closed before calling Stripe when the restricted portal is missing', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    await expect(
+      createPortal({ ...billingEnv, STRIPE_PORTAL_CONFIGURATION_ID: '' }, 'cus_cortex'),
+    ).rejects.toThrow('STRIPE_PORTAL_CONFIGURATION_ID');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('accepts a current valid webhook signature and rejects forged or stale signatures', async () => {

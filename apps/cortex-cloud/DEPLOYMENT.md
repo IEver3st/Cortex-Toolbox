@@ -81,16 +81,14 @@ The generator never writes provider, Stripe, webhook, WorkOS server, or Cloudfla
 
 ## Stripe setup
 
-The optional `stripe:setup` script reads Product IDs and Price IDs from the owner environment. It does not contain a Cortex catalogue. Use test-mode objects during development and never run automated tests with a live Stripe credential.
+The optional `stripe:setup` script reads the four Price IDs from the owner environment, derives their Product IDs from Stripe, and verifies the active Cortex product metadata, amount, currency, and cadence. It does not contain a live Cortex catalogue. Use test-mode objects during development and never run automated tests with a live Stripe credential.
 
 Required owner-shell variables for catalogue validation are:
 
-- `STRIPE_CREATOR_PRODUCT_ID`
-- `STRIPE_PRO_PRODUCT_ID`
 - the four Price ID variables listed above
 - `STRIPE_SECRET_KEY`
 
-Portal mutation additionally requires the explicit confirmation variable documented by the script. Store the resulting portal configuration ID as deployment configuration, not source.
+Portal mutation additionally requires the explicit confirmation variable documented by the script. Store the resulting `bpc_` portal configuration ID as deployment configuration, not source. Commercial configuration, Checkout, and Portal all fail closed until this restricted configuration is present.
 
 Configure the production Stripe webhook at the deployed Worker origin plus `/v1/stripe/webhook` for these events:
 
