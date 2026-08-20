@@ -7,98 +7,17 @@ permissions:
   contents: read
 jobs:
   verify:
-    if: github.event_name == 'pull_request' && github.head_ref == 'agent/fix-cortex-hosted-auth-billing'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with: { version: 10.33.0 }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 24, cache: pnpm }
-      - run: python scripts/agent-release-fix.py
-      - name: Update patched transitive overrides
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('package.json')
-          text = path.read_text(encoding='utf-8')
-          old = '"nanoid": "3.3.17"'
-          new = '"nanoid": "3.3.18"'
-          if text.count(old) != 1:
-              raise SystemExit('Expected exactly one nanoid 3.3.17 override.')
-          path.write_text(text.replace(old, new), encoding='utf-8')
-          PY
-      - name: Correct generated regression fixtures
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          hosted = Path('apps/desktop/src/main/ai/hosted-client.test.ts')
-          hosted_text = hosted.read_text(encoding='utf-8')
-          hosted_old = "import { CortexHostedClient, CortexHostedResponseError } from './hosted-client';"
-          hosted_new = "import { CortexHostedClient } from './hosted-client';"
-          if hosted_text.count(hosted_old) != 1:
-              raise SystemExit('Expected the generated hosted-client test import once.')
-          hosted.write_text(hosted_text.replace(hosted_old, hosted_new), encoding='utf-8')
-
-          auth = Path('apps/desktop/src/main/auth-service.test.ts')
-          auth_text = auth.read_text(encoding='utf-8')
-          replacements = {
-              'return mocks.hostedMe();': 'return mocks.hostedMe() as unknown;',
-              'return mocks.hostedCheckout(plan, interval);': 'return mocks.hostedCheckout(plan, interval) as unknown;',
-              'return mocks.hostedPortal();': 'return mocks.hostedPortal() as unknown;',
-          }
-          for old, new in replacements.items():
-              if auth_text.count(old) != 1:
-                  raise SystemExit(f'Expected generated mock expression once: {old}')
-              auth_text = auth_text.replace(old, new)
-          auth.write_text(auth_text, encoding='utf-8')
-
-          commercial = Path('apps/cortex-cloud/src/commercial-integration.test.ts')
-          commercial_text = commercial.read_text(encoding='utf-8')
-          portal_old = "STRIPE_PORTAL_CONFIGURATION_ID: '',"
-          portal_new = "STRIPE_PORTAL_CONFIGURATION_ID: '" + 'bpc' + "_test',"
-          if commercial_text.count(portal_old) != 1:
-              raise SystemExit('Expected the empty commercial portal fixture once.')
-          commercial.write_text(commercial_text.replace(portal_old, portal_new), encoding='utf-8')
-
-          runtime = Path('apps/cortex-cloud/src/runtime-config.test.ts')
-          runtime_text = runtime.read_text(encoding='utf-8')
-          price_replacements = {
-              'price_creator_month': 'price' + '_t1',
-              'price_creator_year': 'price' + '_t2',
-              'price_pro_month': 'price' + '_t3',
-              'price_pro_year': 'price' + '_t4',
-          }
-          for old, new in price_replacements.items():
-              if runtime_text.count(old) != 1:
-                  raise SystemExit(f'Expected generated price fixture once: {old}')
-              runtime_text = runtime_text.replace(old, new)
-          runtime.write_text(runtime_text, encoding='utf-8')
-          PY
-      - name: Keep workflow updates for the authenticated connector
-        shell: bash
-        run: |
-          git checkout HEAD -- \
-            .github/workflows/deploy-cloud.yml \
-            .github/workflows/platform-build.yml \
-            .github/workflows/release.yml
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm format
-      - name: Exclude temporary repair workflow from public-source scan
-        run: git checkout origin/main -- .github/workflows/checks.yml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm security:scan
-      - name: Restore temporary repair workflow after source scan
-        run: git checkout HEAD -- .github/workflows/checks.yml
       - run: pnpm audit --audit-level high
+      - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -115,13 +34,3 @@ jobs:
             echo "Build attempt $attempt failed; retrying the external Electron download."
             sleep $((attempt * 5))
           done
-      - run: git diff --check
-      - name: Commit validated non-workflow fixes
-        shell: bash
-        run: |
-          git config user.name "Cortex"
-          git config user.email "141164617+IEver3st@users.noreply.github.com"
-          git add -A
-          git status --short
-          HUSKY=0 git commit -m "Fix hosted authentication and billing release gates"
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
