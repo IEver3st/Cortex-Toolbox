@@ -44,45 +44,23 @@ jobs:
           hosted = Path('apps/desktop/src/main/ai/hosted-client.test.ts')
           hosted_text = hosted.read_text(encoding='utf-8')
           hosted_old = "import { CortexHostedClient, CortexHostedResponseError } from './hosted-client';"
+          hosted_new = "import { CortexHostedClient } from './hosted-client';"
           if hosted_text.count(hosted_old) != 1:
               raise SystemExit('Expected the generated hosted-client test import once.')
-          hosted.write_text(
-              hosted_text.replace(hosted_old, "import { CortexHostedClient } from './hosted-client';"),
-              encoding='utf-8',
-          )
+          hosted.write_text(hosted_text.replace(hosted_old, hosted_new), encoding='utf-8')
 
           auth = Path('apps/desktop/src/main/auth-service.test.ts')
           auth_text = auth.read_text(encoding='utf-8')
-          auth_old = """      me() {
-        return mocks.hostedMe();
-      }
-
-      checkout(plan: 'creator' | 'pro', interval: 'month' | 'year') {
-        return mocks.hostedCheckout(plan, interval);
-      }
-
-      portal() {
-        return mocks.hostedPortal();
-      }
-"""
-          auth_new = """      me() {
-        const result: unknown = mocks.hostedMe();
-        return result;
-      }
-
-      checkout(plan: 'creator' | 'pro', interval: 'month' | 'year') {
-        const result: unknown = mocks.hostedCheckout(plan, interval);
-        return result;
-      }
-
-      portal() {
-        const result: unknown = mocks.hostedPortal();
-        return result;
-      }
-"""
-          if auth_text.count(auth_old) != 1:
-              raise SystemExit('Expected the generated hosted-client mock methods once.')
-          auth.write_text(auth_text.replace(auth_old, auth_new), encoding='utf-8')
+          replacements = {
+              'return mocks.hostedMe();': 'return mocks.hostedMe() as unknown;',
+              'return mocks.hostedCheckout(plan, interval);': 'return mocks.hostedCheckout(plan, interval) as unknown;',
+              'return mocks.hostedPortal();': 'return mocks.hostedPortal() as unknown;',
+          }
+          for old, new in replacements.items():
+              if auth_text.count(old) != 1:
+                  raise SystemExit(f'Expected generated mock expression once: {old}')
+              auth_text = auth_text.replace(old, new)
+          auth.write_text(auth_text, encoding='utf-8')
           PY
       - name: Remove one-shot automation
         shell: bash
