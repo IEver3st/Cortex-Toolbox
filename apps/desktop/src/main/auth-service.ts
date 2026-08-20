@@ -5,7 +5,7 @@ import { createWorkOS, type User } from '@workos-inc/node';
 import { z } from 'zod';
 import { accountChangedEvent, type AccountStatus } from '../shared/contracts';
 import type { MainEnv } from './config/env';
-import { CortexHostedClient } from './ai/hosted-client';
+import { CortexHostedClient, CortexHostedResponseError } from './ai/hosted-client';
 import { secureSecrets } from './ai/secure-storage';
 
 export const CORTEX_AUTH_PROTOCOL = 'cortex-toolbox';
@@ -155,7 +155,11 @@ export class CortexAuthService {
         ai: hosted.ai,
         message: null,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof CortexHostedResponseError && error.status === 401) {
+        this.expireRejectedHostedSession();
+        return this.baseStatus('expired', null);
+      }
       return {
         ...this.baseStatus('signed-in', identity),
         message: 'Cortex could not refresh plan and usage right now.',
@@ -174,19 +178,29 @@ export class CortexAuthService {
 
   async checkout(plan: 'creator' | 'pro', interval: 'month' | 'year'): Promise<void> {
     const token = await this.accessToken();
-    const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).checkout(
-      plan,
-      interval,
-    );
-    await shell.openExternal(url);
-    this.scheduleBillingRefresh();
+    try {
+      const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).checkout(
+        plan,
+        interval,
+      );
+      await shell.openExternal(url);
+      this.scheduleBillingRefresh();
+    } catch (error) {
+      await this.handleHostedActionFailure(error);
+      throw error;
+    }
   }
 
   async portal(): Promise<void> {
     const token = await this.accessToken();
-    const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).portal();
-    await shell.openExternal(url);
-    this.scheduleBillingRefresh();
+    try {
+      const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).portal();
+      await shell.openExternal(url);
+      this.scheduleBillingRefresh();
+    } catch (error) {
+      await this.handleHostedActionFailure(error);
+      throw error;
+    }
   }
 
   async broadcast(): Promise<void> {
@@ -198,6 +212,18 @@ export class CortexAuthService {
 
   async reportFailure(message: string): Promise<void> {
     this.notice = message;
+    await this.broadcast();
+  }
+
+  private expireRejectedHostedSession(): void {
+    secureSecrets.remove('workos-session');
+    this.expired = true;
+    this.notice = 'Cortex Cloud rejected this session. Sign in again.';
+  }
+
+  private async handleHostedActionFailure(error: unknown): Promise<void> {
+    if (!(error instanceof CortexHostedResponseError) || error.status !== 401) return;
+    this.expireRejectedHostedSession();
     await this.broadcast();
   }
 

@@ -7,6 +7,7 @@ const DEPLOYMENT_VARIABLES = [
   'STRIPE_CREATOR_ANNUAL_PRICE_ID',
   'STRIPE_PRO_MONTHLY_PRICE_ID',
   'STRIPE_PRO_ANNUAL_PRICE_ID',
+  'STRIPE_PORTAL_CONFIGURATION_ID',
   'BILLING_RETURN_URL',
 ] as const;
 
@@ -36,7 +37,10 @@ const productionEnvironmentSchema = z.object({
     .string()
     .trim()
     .regex(/^price_[A-Za-z0-9]+$/),
-  STRIPE_PORTAL_CONFIGURATION_ID: z.string().trim().default(''),
+  STRIPE_PORTAL_CONFIGURATION_ID: z
+    .string()
+    .trim()
+    .regex(/^bpc_[A-Za-z0-9]+$/),
   BILLING_RETURN_URL: httpsUrl,
   CORTEX_AI_ENABLED: z.literal('true'),
   AI_PROVIDER_ENABLED: z.literal('true'),
@@ -128,6 +132,7 @@ export function validateProductionConfig(config: string): string[] {
     'main',
     'compatibility_date',
     'database_id',
+    'WORKOS_ISSUER',
     ...DEPLOYMENT_VARIABLES,
   ]) {
     if (!values.get(name)?.trim()) issues.push(`Missing required deployment value: ${name}.`);
@@ -140,6 +145,9 @@ export function validateProductionConfig(config: string): string[] {
   if (values.get('AI_PROVIDER_ENABLED') !== 'true')
     issues.push('AI_PROVIDER_ENABLED must be true.');
   if (values.get('CORTEX_FREE_ONLY') !== 'false') issues.push('CORTEX_FREE_ONLY must be false.');
+  if (!/^bpc_[A-Za-z0-9]+$/.test(values.get('STRIPE_PORTAL_CONFIGURATION_ID') ?? '')) {
+    issues.push('STRIPE_PORTAL_CONFIGURATION_ID must be a Stripe bpc_ identifier.');
+  }
   return [...new Set(issues)];
 }
 

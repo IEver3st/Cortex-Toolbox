@@ -9,21 +9,28 @@ const ENV = {
 };
 
 describe('WorkOS access-token verification', () => {
-  it('accepts the client-specific WorkOS issuer and pins the client claim', async () => {
+  it('accepts the configured WorkOS issuer with or without a trailing slash', async () => {
+    for (const issuer of ['https://api.workos.com', 'https://api.workos.com/']) {
+      const { token, jwks } = await signedToken({ issuer, clientId: CLIENT_ID });
+      await expect(verifyWorkOsAccessToken(token, ENV, jwks)).resolves.toEqual({
+        userId: 'user_01',
+        sessionId: 'session_01',
+      });
+    }
+  });
+
+  it('rejects the retired client-specific issuer shape', async () => {
     const { token, jwks } = await signedToken({
       issuer: `https://api.workos.com/user_management/${CLIENT_ID}`,
       clientId: CLIENT_ID,
     });
 
-    await expect(verifyWorkOsAccessToken(token, ENV, jwks)).resolves.toEqual({
-      userId: 'user_01',
-      sessionId: 'session_01',
-    });
+    await expect(verifyWorkOsAccessToken(token, ENV, jwks)).rejects.toThrow();
   });
 
   it('rejects a validly signed token issued to another WorkOS client', async () => {
     const { token, jwks } = await signedToken({
-      issuer: `https://api.workos.com/user_management/${CLIENT_ID}`,
+      issuer: 'https://api.workos.com',
       clientId: 'client_previous',
     });
 
@@ -32,16 +39,12 @@ describe('WorkOS access-token verification', () => {
     );
   });
 
-  it('keeps an explicitly configured custom issuer in the allowlist', () => {
+  it('normalizes an explicitly configured custom issuer', () => {
     expect(
       acceptedWorkOsIssuers({
-        WORKOS_CLIENT_ID: CLIENT_ID,
-        WORKOS_ISSUER: 'https://auth.cortex.example',
+        WORKOS_ISSUER: 'https://auth.cortex.example/',
       }),
-    ).toEqual([
-      `https://api.workos.com/user_management/${CLIENT_ID}`,
-      'https://auth.cortex.example',
-    ]);
+    ).toEqual(['https://auth.cortex.example', 'https://auth.cortex.example/']);
   });
 });
 

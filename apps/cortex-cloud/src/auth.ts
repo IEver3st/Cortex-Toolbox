@@ -42,15 +42,10 @@ export async function verifyWorkOsAccessToken(
   return { userId: payload.sub, sessionId: payload.sid };
 }
 
-export function acceptedWorkOsIssuers(
-  env: Pick<Env, 'WORKOS_CLIENT_ID' | 'WORKOS_ISSUER'>,
-): string[] {
-  const issuers = new Set([
-    `https://api.workos.com/user_management/${encodeURIComponent(env.WORKOS_CLIENT_ID)}`,
-  ]);
-  const configuredIssuer = env.WORKOS_ISSUER.trim();
-  if (configuredIssuer) issuers.add(configuredIssuer);
-  return [...issuers];
+export function acceptedWorkOsIssuers(env: Pick<Env, 'WORKOS_ISSUER'>): string[] {
+  const configuredIssuer = env.WORKOS_ISSUER.trim().replace(/\/+$/, '');
+  if (!configuredIssuer) return [];
+  return [configuredIssuer, `${configuredIssuer}/`];
 }
 
 export class HttpError extends Error {
