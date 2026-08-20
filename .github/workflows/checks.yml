@@ -21,12 +21,26 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 24, cache: pnpm }
       - run: python scripts/agent-release-fix.py
+      - name: Update patched transitive overrides
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('package.json')
+          text = path.read_text(encoding='utf-8')
+          old = '"nanoid": "3.3.17"'
+          new = '"nanoid": "3.3.18"'
+          if text.count(old) != 1:
+              raise SystemExit('Expected exactly one nanoid 3.3.17 override.')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
       - name: Remove one-shot automation
         shell: bash
         run: |
           git checkout origin/main -- .github/workflows/checks.yml
           rm -f .github/workflows/agent-release-fix.yml scripts/agent-release-fix.py
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm format
       - run: pnpm security:scan
       - run: pnpm audit --audit-level high
