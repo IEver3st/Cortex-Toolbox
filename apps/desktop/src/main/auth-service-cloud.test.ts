@@ -87,10 +87,7 @@ describe('hosted account session rejection', () => {
       'fetch',
       vi.fn(() =>
         Promise.resolve(
-          Response.json(
-            { error: 'Your Cortex session expired. Sign in again.' },
-            { status: 401 },
-          ),
+          Response.json({ error: 'Your Cortex session expired. Sign in again.' }, { status: 401 }),
         ),
       ),
     );

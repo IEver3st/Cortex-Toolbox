@@ -39,11 +39,8 @@ describe('public and production Worker configuration', () => {
   });
 
   it('requires a restricted Stripe Customer Portal configuration for production', () => {
-    const { STRIPE_PORTAL_CONFIGURATION_ID: _portal, ...withoutPortal } =
-      productionEnvironment;
-    expect(() => createProductionConfig(withoutPortal)).toThrow(
-      'STRIPE_PORTAL_CONFIGURATION_ID',
-    );
+    const { STRIPE_PORTAL_CONFIGURATION_ID: _portal, ...withoutPortal } = productionEnvironment;
+    expect(() => createProductionConfig(withoutPortal)).toThrow('STRIPE_PORTAL_CONFIGURATION_ID');
   });
 
   it('names missing deployment variables without revealing any supplied value', () => {
