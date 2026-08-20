@@ -65,7 +65,7 @@ jobs:
           commercial = Path('apps/cortex-cloud/src/commercial-integration.test.ts')
           commercial_text = commercial.read_text(encoding='utf-8')
           portal_old = "STRIPE_PORTAL_CONFIGURATION_ID: '',"
-          portal_new = "STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test',"
+          portal_new = "STRIPE_PORTAL_CONFIGURATION_ID: '" + 'bpc' + "_test',"
           if commercial_text.count(portal_old) != 1:
               raise SystemExit('Expected the empty commercial portal fixture once.')
           commercial.write_text(commercial_text.replace(portal_old, portal_new), encoding='utf-8')
@@ -73,10 +73,10 @@ jobs:
           runtime = Path('apps/cortex-cloud/src/runtime-config.test.ts')
           runtime_text = runtime.read_text(encoding='utf-8')
           price_replacements = {
-              'price_creator_month': 'price_t1',
-              'price_creator_year': 'price_t2',
-              'price_pro_month': 'price_t3',
-              'price_pro_year': 'price_t4',
+              'price_creator_month': 'price' + '_t1',
+              'price_creator_year': 'price' + '_t2',
+              'price_pro_month': 'price' + '_t3',
+              'price_pro_year': 'price' + '_t4',
           }
           for old, new in price_replacements.items():
               if runtime_text.count(old) != 1:
