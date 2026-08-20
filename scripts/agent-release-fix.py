@@ -1124,14 +1124,5 @@ Portal mutation additionally requires the explicit confirmation variable documen
 """,
 )
 
-# Remove this one-shot automation from the resulting commit.
-for relative in [
-    ".github/workflows/agent-release-fix.yml",
-    "scripts/agent-release-fix.py",
-]:
-    target = ROOT / relative
-    if target.exists():
-        target.unlink()
-
 subprocess.run(["git", "diff", "--check"], cwd=ROOT, check=True)
 print("Applied Cortex hosted auth, billing, and release hardening.")
