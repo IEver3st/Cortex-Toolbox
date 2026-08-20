@@ -111,7 +111,7 @@ for (const [index, plan] of /** @type {const} */ (['creator', 'pro']).entries())
   });
 }
 
-const configurationId = process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim();
+const configurationId = (process.env['STRIPE_PORTAL_CONFIGURATION_ID'] ?? '').trim();
 if (configurationId && !/^bpc_[A-Za-z0-9]+$/.test(configurationId)) {
   throw new Error('STRIPE_PORTAL_CONFIGURATION_ID must be a Stripe bpc_ configuration ID.');
 }
