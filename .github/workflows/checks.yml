@@ -84,11 +84,13 @@ jobs:
               runtime_text = runtime_text.replace(old, new)
           runtime.write_text(runtime_text, encoding='utf-8')
           PY
-      - name: Remove one-shot automation
+      - name: Keep workflow updates for the authenticated connector
         shell: bash
         run: |
-          git checkout origin/main -- .github/workflows/checks.yml
-          rm -f .github/workflows/agent-release-fix.yml scripts/agent-release-fix.py
+          git checkout HEAD -- \
+            .github/workflows/deploy-cloud.yml \
+            .github/workflows/platform-build.yml \
+            .github/workflows/release.yml
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm format
       - run: pnpm security:scan
@@ -110,7 +112,7 @@ jobs:
             sleep $((attempt * 5))
           done
       - run: git diff --check
-      - name: Commit validated fixes
+      - name: Commit validated non-workflow fixes
         shell: bash
         run: |
           git config user.name "Cortex"
