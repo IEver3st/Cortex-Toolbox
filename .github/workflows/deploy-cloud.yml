@@ -29,19 +29,20 @@ jobs:
       STRIPE_RECONCILE_AFTER_SECONDS: ${{ vars.STRIPE_RECONCILE_AFTER_SECONDS || '900' }}
       CORTEX_ADMIN_WORKOS_USER_IDS: ${{ vars.CORTEX_ADMIN_WORKOS_USER_IDS }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with: { version: 10.33.0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm security:scan
       - run: pnpm --filter @cortex/cloud run verify:config
       - run: pnpm --filter @cortex/cloud run check:bindings
+      - run: pnpm --filter @cortex/cloud run prepare:deploy-config
       - name: Verify required Cloudflare secrets exist
         shell: bash
         run: |
-          pnpm --filter @cortex/cloud exec wrangler secret list --json > "$RUNNER_TEMP/cortex-secret-names.json"
+          pnpm --filter @cortex/cloud exec wrangler secret list --config .wrangler/deploy/wrangler.production.toml --json > "$RUNNER_TEMP/cortex-secret-names.json"
           node -e "const fs=require('fs');const rows=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const names=new Set(rows.map(x=>x.name));const required=['OPENROUTER_API_KEY','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET'];const missing=required.filter(x=>!names.has(x));if(missing.length)throw new Error('Missing Cloudflare secrets: '+missing.join(', '));" "$RUNNER_TEMP/cortex-secret-names.json"
       - run: pnpm --filter @cortex/cloud run deploy:dry-run
       - run: pnpm --filter @cortex/cloud run migrate:production
