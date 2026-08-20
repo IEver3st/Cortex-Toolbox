@@ -1,0 +1,41 @@
+name: Format commercial release fix
+
+on:
+  push:
+    branches: [agent/fix-commercial-release-gates]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: format-commercial-fix
+  cancel-in-progress: false
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: agent/fix-commercial-release-gates
+          fetch-depth: 0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Format the changed TypeScript files
+        run: >-
+          pnpm exec prettier --write
+          apps/cortex-cloud/src/deployment-config.test.ts
+          apps/desktop/src/main/auth-service-cloud.test.ts
+      - name: Remove this one-time workflow and commit formatting
+        shell: bash
+        run: |
+          rm .github/workflows/format-commercial-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/cortex-cloud/src/deployment-config.test.ts apps/desktop/src/main/auth-service-cloud.test.ts .github/workflows/format-commercial-fix.yml
+          git commit -m 'Format commercial release fixes'
+          git push origin HEAD:agent/fix-commercial-release-gates
