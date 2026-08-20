@@ -7,10 +7,18 @@ const DEPLOYMENT_VARIABLES = [
   'STRIPE_CREATOR_ANNUAL_PRICE_ID',
   'STRIPE_PRO_MONTHLY_PRICE_ID',
   'STRIPE_PRO_ANNUAL_PRICE_ID',
+  'STRIPE_PORTAL_CONFIGURATION_ID',
   'BILLING_RETURN_URL',
 ] as const;
 
-const httpsUrl = z.url().refine((value) => value.startsWith('https://'));
+const httpsUrl = z.url().refine((value) => {
+  const url = new URL(value);
+  return url.protocol === 'https:' && !url.username && !url.password;
+});
+const stripePortalConfigurationId = z
+  .string()
+  .trim()
+  .regex(/^bpc_[A-Za-z0-9]+$/);
 const productionEnvironmentSchema = z.object({
   CLOUDFLARE_D1_DATABASE_ID: z.uuid(),
   CLOUDFLARE_WORKER_NAME: z.string().trim().min(1).default('cortex-cloud'),
@@ -36,7 +44,7 @@ const productionEnvironmentSchema = z.object({
     .string()
     .trim()
     .regex(/^price_[A-Za-z0-9]+$/),
-  STRIPE_PORTAL_CONFIGURATION_ID: z.string().trim().default(''),
+  STRIPE_PORTAL_CONFIGURATION_ID: stripePortalConfigurationId,
   BILLING_RETURN_URL: httpsUrl,
   CORTEX_AI_ENABLED: z.literal('true'),
   AI_PROVIDER_ENABLED: z.literal('true'),
@@ -128,17 +136,33 @@ export function validateProductionConfig(config: string): string[] {
     'main',
     'compatibility_date',
     'database_id',
+    'WORKOS_ISSUER',
     ...DEPLOYMENT_VARIABLES,
   ]) {
     if (!values.get(name)?.trim()) issues.push(`Missing required deployment value: ${name}.`);
   }
   for (const secret of SECRET_NAMES) {
-    if (values.has(secret))
+    if (values.has(secret)) {
       issues.push(`${secret} must not be written to a deployment config file.`);
+    }
+  }
+  const portalId = values.get('STRIPE_PORTAL_CONFIGURATION_ID') ?? '';
+  if (portalId && !/^bpc_[A-Za-z0-9]+$/.test(portalId)) {
+    issues.push('STRIPE_PORTAL_CONFIGURATION_ID must be a Stripe bpc_ configuration ID.');
+  }
+  const priceIds = [
+    values.get('STRIPE_CREATOR_MONTHLY_PRICE_ID'),
+    values.get('STRIPE_CREATOR_ANNUAL_PRICE_ID'),
+    values.get('STRIPE_PRO_MONTHLY_PRICE_ID'),
+    values.get('STRIPE_PRO_ANNUAL_PRICE_ID'),
+  ].filter((value): value is string => Boolean(value));
+  if (priceIds.length === 4 && new Set(priceIds).size !== priceIds.length) {
+    issues.push('The four Stripe Price IDs must be distinct.');
   }
   if (values.get('CORTEX_AI_ENABLED') !== 'true') issues.push('CORTEX_AI_ENABLED must be true.');
-  if (values.get('AI_PROVIDER_ENABLED') !== 'true')
+  if (values.get('AI_PROVIDER_ENABLED') !== 'true') {
     issues.push('AI_PROVIDER_ENABLED must be true.');
+  }
   if (values.get('CORTEX_FREE_ONLY') !== 'false') issues.push('CORTEX_FREE_ONLY must be false.');
   return [...new Set(issues)];
 }

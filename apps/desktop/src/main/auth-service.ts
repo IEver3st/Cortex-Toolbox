@@ -1,12 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type Server, type ServerResponse } from 'node:http';
-import { BrowserWindow, shell } from 'electron';
 import { createWorkOS, type User } from '@workos-inc/node';
+import { BrowserWindow, shell } from 'electron';
 import { z } from 'zod';
 import { accountChangedEvent, type AccountStatus } from '../shared/contracts';
-import type { MainEnv } from './config/env';
-import { CortexHostedClient } from './ai/hosted-client';
+import { CortexHostedClient, CortexHostedResponseError } from './ai/hosted-client';
 import { secureSecrets } from './ai/secure-storage';
+import type { MainEnv } from './config/env';
 
 export const CORTEX_AUTH_PROTOCOL = 'cortex-toolbox';
 export const CORTEX_AUTH_REDIRECT_URI = `${CORTEX_AUTH_PROTOCOL}://auth/callback`;
@@ -125,7 +125,7 @@ export class CortexAuthService {
 
   async accessToken(): Promise<string> {
     const session = await this.validSession();
-    if (!session) throw new Error('Sign in to use Cortex Hosted.');
+    if (!session) throw new Error('Sign in to use Cortex AI.');
     return session.accessToken;
   }
 
@@ -155,7 +155,11 @@ export class CortexAuthService {
         ai: hosted.ai,
         message: null,
       };
-    } catch {
+    } catch (error) {
+      if (isHostedSessionRejection(error)) {
+        this.expireSession(error.message);
+        return this.baseStatus('expired', null);
+      }
       return {
         ...this.baseStatus('signed-in', identity),
         message: 'Cortex could not refresh plan and usage right now.',
@@ -173,18 +177,13 @@ export class CortexAuthService {
   }
 
   async checkout(plan: 'creator' | 'pro', interval: 'month' | 'year'): Promise<void> {
-    const token = await this.accessToken();
-    const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).checkout(
-      plan,
-      interval,
-    );
+    const url = await this.withHostedClient((client) => client.checkout(plan, interval));
     await shell.openExternal(url);
     this.scheduleBillingRefresh();
   }
 
   async portal(): Promise<void> {
-    const token = await this.accessToken();
-    const url = await new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token).portal();
+    const url = await this.withHostedClient((client) => client.portal());
     await shell.openExternal(url);
     this.scheduleBillingRefresh();
   }
@@ -201,13 +200,26 @@ export class CortexAuthService {
     await this.broadcast();
   }
 
+  private async withHostedClient<T>(
+    operation: (client: CortexHostedClient) => Promise<T>,
+  ): Promise<T> {
+    const token = await this.accessToken();
+    try {
+      return await operation(new CortexHostedClient(this.env.CORTEX_CLOUD_API_URL, token));
+    } catch (error) {
+      if (isHostedSessionRejection(error)) {
+        this.expireSession(error.message);
+        await this.broadcast();
+      }
+      throw error;
+    }
+  }
+
   private async validSession(): Promise<StoredSession | null> {
     const session = this.readSession();
     if (!session) return null;
     if (jwtStringClaim(session.accessToken, 'client_id') !== this.env.CORTEX_WORKOS_CLIENT_ID) {
-      secureSecrets.remove('workos-session');
-      this.expired = true;
-      this.notice = 'This Cortex session belongs to a different build. Sign in again.';
+      this.expireSession('This Cortex session belongs to a different build. Sign in again.');
       return null;
     }
     const expiresAt = jwtNumberClaim(session.accessToken, 'exp');
@@ -219,6 +231,7 @@ export class CortexAuthService {
       });
       this.saveSession(refreshed.accessToken, refreshed.refreshToken, refreshed.user);
       this.expired = false;
+      this.notice = null;
       return this.readSession();
     } catch (error) {
       if (!isTerminalRefreshError(error)) {
@@ -226,8 +239,7 @@ export class CortexAuthService {
           cause: error,
         });
       }
-      secureSecrets.remove('workos-session');
-      this.expired = true;
+      this.expireSession('Your Cortex session expired. Sign in again.');
       return null;
     }
   }
@@ -258,6 +270,12 @@ export class CortexAuthService {
         user: { id: user.id, email: user.email, firstName, lastName, profilePictureUrl },
       } satisfies StoredSession),
     );
+  }
+
+  private expireSession(message: string): void {
+    secureSecrets.remove('workos-session');
+    this.expired = true;
+    this.notice = message;
   }
 
   private baseStatus(
@@ -417,6 +435,10 @@ function jwtNumberClaim(token: string, claim: string): number | null {
 function jwtStringClaim(token: string, claim: string): string | null {
   const value = decodeJwt(token)?.[claim];
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function isHostedSessionRejection(error: unknown): error is CortexHostedResponseError {
+  return error instanceof CortexHostedResponseError && error.status === 401;
 }
 
 function isTerminalRefreshError(error: unknown): boolean {

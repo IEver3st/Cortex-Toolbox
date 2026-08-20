@@ -13,7 +13,19 @@ const base = {
   AI_PROVIDER_ENABLED: 'false',
   WORKOS_CLIENT_ID: 'client_test',
   WORKOS_ISSUER: 'https://api.workos.com/',
-} as never;
+};
+
+const commercial = {
+  ...base,
+  CORTEX_FREE_ONLY: 'false',
+  STRIPE_SECRET_KEY: 'stripe-test-secret',
+  STRIPE_CREATOR_MONTHLY_PRICE_ID: 'price_cm',
+  STRIPE_CREATOR_ANNUAL_PRICE_ID: 'price_ca',
+  STRIPE_PRO_MONTHLY_PRICE_ID: 'price_pm',
+  STRIPE_PRO_ANNUAL_PRICE_ID: 'price_pa',
+  STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test',
+  BILLING_RETURN_URL: 'https://billing.example.test/account',
+};
 
 describe('Worker runtime configuration', () => {
   it('fails closed when commercial feature flags are absent', () => {
@@ -22,7 +34,22 @@ describe('Worker runtime configuration', () => {
   });
 
   it('does not require production credentials for free-only local development', () => {
-    expect(runtimeConfigurationIssues(base)).toEqual([]);
+    expect(runtimeConfigurationIssues(base as never)).toEqual([]);
+  });
+
+  it('allows an HTTP billing return URL only on the local loopback interface', () => {
+    expect(
+      requireBillingConfig({
+        ...commercial,
+        BILLING_RETURN_URL: 'http://127.0.0.1:5180/account',
+      } as never).returnUrl,
+    ).toBe('http://127.0.0.1:5180/account');
+    expect(() =>
+      requireBillingConfig({
+        ...commercial,
+        BILLING_RETURN_URL: 'http://billing.example.test/account',
+      } as never),
+    ).toThrow('BILLING_RETURN_URL');
   });
 
   it('names missing variables without including values', () => {

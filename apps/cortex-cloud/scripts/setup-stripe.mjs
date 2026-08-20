@@ -1,8 +1,3 @@
-const PRODUCTS = {
-  creator: required(process.env.STRIPE_CREATOR_PRODUCT_ID, 'Set STRIPE_CREATOR_PRODUCT_ID.'),
-  pro: required(process.env.STRIPE_PRO_PRODUCT_ID, 'Set STRIPE_PRO_PRODUCT_ID.'),
-};
-
 /** @type {Array<{plan: 'creator' | 'pro', interval: 'month' | 'year', variable: string, expectedAmount: number}>} */
 const PRICES = [
   {
@@ -27,6 +22,8 @@ const secret = required(
 );
 /** @type {Array<{plan: 'creator' | 'pro', interval: 'month' | 'year', id: string}>} */
 const resolved = [];
+/** @type {Map<'creator' | 'pro', string>} */
+const products = new Map();
 
 for (const policy of PRICES) {
   const id = required(process.env[policy.variable], `Set ${policy.variable}.`);
@@ -35,20 +32,51 @@ for (const policy of PRICES) {
   const productId =
     typeof productValue === 'string' ? productValue : recordString(productValue, 'id');
   const recurring = record(price.recurring);
-  if (price.active !== true || productId !== PRODUCTS[policy.plan]) {
-    throw new Error(`${id} is not an active ${policy.plan} price on the expected product.`);
+  if (!productId || price.active !== true || price.type !== 'recurring') {
+    throw new Error(`${id} is not an active recurring ${policy.plan} price.`);
   }
   if (
     price.currency !== 'usd' ||
     price.unit_amount !== policy.expectedAmount ||
-    recurring.interval !== policy.interval
+    recurring.interval !== policy.interval ||
+    recurring.interval_count !== 1 ||
+    recurring.usage_type !== 'licensed'
   ) {
     throw new Error(
       `${id} does not match the approved ${policy.plan}/${policy.interval} amount and cadence.`,
     );
   }
+  const existingProduct = products.get(policy.plan);
+  if (existingProduct && existingProduct !== productId) {
+    throw new Error(`The configured ${policy.plan} prices do not belong to the same product.`);
+  }
+  products.set(policy.plan, productId);
   resolved.push({ plan: policy.plan, interval: policy.interval, id });
   console.log(`Verified configured ${policy.plan}/${policy.interval} price.`);
+}
+
+if (products.get('creator') === products.get('pro')) {
+  throw new Error('Creator and Pro must use distinct Stripe products.');
+}
+
+for (const plan of /** @type {const} */ (['creator', 'pro'])) {
+  const productId = requiredString(
+    products.get(plan),
+    `Stripe did not return a product for the ${plan} prices.`,
+  );
+  const product = await stripe('GET', `/v1/products/${encodeURIComponent(productId)}`);
+  const metadata = record(product.metadata);
+  if (
+    product.active !== true ||
+    metadata.app !== 'cortex-toolbox' ||
+    metadata.entitlement !== 'cortex_ai' ||
+    metadata.plan !== plan
+  ) {
+    throw new Error(
+      `${productId} is not an active Cortex AI ${plan} product with the approved metadata.`,
+    );
+  }
+  console.log(`Verified configured ${plan} product.`);
 }
 
 if (!process.argv.includes('--apply-portal')) {
@@ -74,15 +102,19 @@ const form = new URLSearchParams({
   'features[subscription_update][default_allowed_updates][0]': 'price',
 });
 
-for (const [index, product] of Object.values(PRODUCTS).entries()) {
+for (const [index, plan] of /** @type {const} */ (['creator', 'pro']).entries()) {
+  const product = requiredString(products.get(plan), `Missing ${plan} product.`);
   form.set(`features[subscription_update][products][${index}][product]`, product);
-  const ids = resolved.filter((price) => PRODUCTS[price.plan] === product).map((price) => price.id);
+  const ids = resolved.filter((price) => price.plan === plan).map((price) => price.id);
   ids.forEach((id, priceIndex) => {
     form.set(`features[subscription_update][products][${index}][prices][${priceIndex}]`, id);
   });
 }
 
-const configurationId = process.env.STRIPE_PORTAL_CONFIGURATION_ID;
+const configurationId = process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim();
+if (configurationId && !/^bpc_[A-Za-z0-9]+$/.test(configurationId)) {
+  throw new Error('STRIPE_PORTAL_CONFIGURATION_ID must be a Stripe bpc_ configuration ID.');
+}
 const configuration = await stripe(
   'POST',
   configurationId

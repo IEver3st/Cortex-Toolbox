@@ -7,7 +7,19 @@ export class ConfigurationError extends Error {
   }
 }
 
-const httpsUrl = z.url().refine((value) => value.startsWith('https://'));
+const httpsUrl = z.url().refine((value) => {
+  const url = new URL(value);
+  return url.protocol === 'https:' && !url.username && !url.password;
+});
+const billingReturnUrl = z.url().refine((value) => {
+  const url = new URL(value);
+  if (url.username || url.password) return false;
+  if (url.protocol === 'https:') return true;
+  return (
+    url.protocol === 'http:' &&
+    ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname.toLowerCase())
+  );
+});
 const workOsClientId = z
   .string()
   .trim()
@@ -46,7 +58,7 @@ export function requireBillingConfig(env: Env) {
   const prices = requirePriceConfig(env);
   return {
     secretKey: required('STRIPE_SECRET_KEY', env.STRIPE_SECRET_KEY, z.string().trim().min(1)),
-    returnUrl: required('BILLING_RETURN_URL', env.BILLING_RETURN_URL, httpsUrl),
+    returnUrl: required('BILLING_RETURN_URL', env.BILLING_RETURN_URL, billingReturnUrl),
     prices,
   };
 }

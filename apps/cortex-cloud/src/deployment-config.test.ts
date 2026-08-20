@@ -10,10 +10,12 @@ const publicConfig = readFileSync(new URL('../wrangler.toml', import.meta.url), 
 const productionEnvironment = {
   CLOUDFLARE_D1_DATABASE_ID: '10000000-0000-4000-8000-000000000000',
   WORKOS_CLIENT_ID: 'client_test',
+  WORKOS_ISSUER: 'https://api.workos.com/',
   STRIPE_CREATOR_MONTHLY_PRICE_ID: 'price_cm',
   STRIPE_CREATOR_ANNUAL_PRICE_ID: 'price_ca',
   STRIPE_PRO_MONTHLY_PRICE_ID: 'price_pm',
   STRIPE_PRO_ANNUAL_PRICE_ID: 'price_pa',
+  STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test',
   BILLING_RETURN_URL: 'https://billing.example.test/account',
   CORTEX_AI_ENABLED: 'true',
   AI_PROVIDER_ENABLED: 'true',
@@ -29,10 +31,19 @@ describe('public and production Worker configuration', () => {
     const generated = createProductionConfig(productionEnvironment);
     expect(validateProductionConfig(generated)).toEqual([]);
     expect(generated).toContain('database_id =');
+    expect(generated).toContain('STRIPE_PORTAL_CONFIGURATION_ID = "bpc_test"');
     expect(generated).toContain('CORTEX_FREE_ONLY = "false"');
     expect(generated).not.toContain('OPENROUTER_API_KEY');
     expect(generated).not.toContain('STRIPE_SECRET_KEY');
     expect(generated).not.toContain('STRIPE_WEBHOOK_SECRET');
+  });
+
+  it('requires a restricted Stripe Customer Portal configuration for production', () => {
+    const { STRIPE_PORTAL_CONFIGURATION_ID: _portal, ...withoutPortal } =
+      productionEnvironment;
+    expect(() => createProductionConfig(withoutPortal)).toThrow(
+      'STRIPE_PORTAL_CONFIGURATION_ID',
+    );
   });
 
   it('names missing deployment variables without revealing any supplied value', () => {

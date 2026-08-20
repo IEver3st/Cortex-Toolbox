@@ -8,13 +8,13 @@ WORKOS_ISSUER=https://api.workos.com/
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 # Deployment configuration: use Stripe test-mode objects for local development.
-STRIPE_CREATOR_PRODUCT_ID=
-STRIPE_PRO_PRODUCT_ID=
 STRIPE_CREATOR_MONTHLY_PRICE_ID=
 STRIPE_CREATOR_ANNUAL_PRICE_ID=
 STRIPE_PRO_MONTHLY_PRICE_ID=
 STRIPE_PRO_ANNUAL_PRICE_ID=
+# Required whenever commercial billing is enabled. Restrict it to the four approved prices.
 STRIPE_PORTAL_CONFIGURATION_ID=
+# HTTPS is required outside loopback development.
 BILLING_RETURN_URL=http://127.0.0.1:5180/
 # Safe local defaults. Enable commercial services only with test/sandbox values.
 CORTEX_AI_ENABLED=false

@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import type { CortexReasoningMode } from '@cortex/ai/contracts';
+import { z } from 'zod';
 import type { HostedMessage, HostedToolCall, HostedToolDefinition } from './hosted-protocol';
 
 const hostedAccountSchema = z
@@ -46,6 +46,16 @@ export type HostedAccount = z.infer<typeof hostedAccountSchema>;
 
 interface HostedCompletionChoice {
   message?: { content?: string | null; tool_calls?: HostedToolCall[] };
+}
+
+export class CortexHostedResponseError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(productErrorForHostedResponse(status, detail));
+    this.name = 'CortexHostedResponseError';
+  }
 }
 
 export class CortexHostedClient {
@@ -103,8 +113,9 @@ export class CortexHostedClient {
       signal: input.signal,
     })) as { choices?: HostedCompletionChoice[]; error?: { message?: string } };
     const message = payload.choices?.[0]?.message;
-    if (!message)
+    if (!message) {
       throw new Error(payload.error?.message ?? 'Cortex Hosted returned no completion.');
+    }
     return { content: message.content ?? '', toolCalls: message.tool_calls ?? [] };
   }
 
@@ -184,14 +195,16 @@ export class CortexHostedClient {
       } catch {
         // Keep the bounded response text when the service did not return JSON.
       }
-      throw new Error(productErrorForHostedResponse(response.status, message));
+      throw new CortexHostedResponseError(response.status, message);
     }
     return response;
   }
 }
 
 function productErrorForHostedResponse(status: number, detail: string): string {
-  if (status === 401) return 'Sign in to use Cortex AI.';
+  if (status === 401) {
+    return detail || 'Your Cortex session was rejected. Sign in again.';
+  }
   if (status === 402) {
     return /available with Creator or Pro/i.test(detail)
       ? 'Cortex AI is available with Creator or Pro.'
