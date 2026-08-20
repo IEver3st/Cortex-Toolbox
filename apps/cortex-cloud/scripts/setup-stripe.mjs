@@ -111,7 +111,7 @@ for (const [index, plan] of /** @type {const} */ (['creator', 'pro']).entries())
   });
 }
 
-const configurationId = (process.env['STRIPE_PORTAL_CONFIGURATION_ID'] ?? '').trim();
+const configurationId = optionalString(process.env.STRIPE_PORTAL_CONFIGURATION_ID);
 if (configurationId && !/^bpc_[A-Za-z0-9]+$/.test(configurationId)) {
   throw new Error('STRIPE_PORTAL_CONFIGURATION_ID must be a Stripe bpc_ configuration ID.');
 }
@@ -161,6 +161,11 @@ function record(value) {
 function recordString(value, key) {
   const candidate = record(value)[key];
   return typeof candidate === 'string' ? candidate : null;
+}
+
+/** @param {unknown} value */
+function optionalString(value) {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 /** @param {unknown} value @param {string} message */
