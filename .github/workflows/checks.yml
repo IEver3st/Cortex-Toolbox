@@ -35,7 +35,7 @@ jobs:
               raise SystemExit('Expected exactly one nanoid 3.3.17 override.')
           path.write_text(text.replace(old, new), encoding='utf-8')
           PY
-      - name: Correct generated test lint
+      - name: Correct generated regression fixtures
         shell: bash
         run: |
           python - <<'PY'
@@ -61,6 +61,28 @@ jobs:
                   raise SystemExit(f'Expected generated mock expression once: {old}')
               auth_text = auth_text.replace(old, new)
           auth.write_text(auth_text, encoding='utf-8')
+
+          commercial = Path('apps/cortex-cloud/src/commercial-integration.test.ts')
+          commercial_text = commercial.read_text(encoding='utf-8')
+          portal_old = "STRIPE_PORTAL_CONFIGURATION_ID: '',"
+          portal_new = "STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test',"
+          if commercial_text.count(portal_old) != 1:
+              raise SystemExit('Expected the empty commercial portal fixture once.')
+          commercial.write_text(commercial_text.replace(portal_old, portal_new), encoding='utf-8')
+
+          runtime = Path('apps/cortex-cloud/src/runtime-config.test.ts')
+          runtime_text = runtime.read_text(encoding='utf-8')
+          price_replacements = {
+              'price_creator_month': 'price_creatorMonth',
+              'price_creator_year': 'price_creatorYear',
+              'price_pro_month': 'price_proMonth',
+              'price_pro_year': 'price_proYear',
+          }
+          for old, new in price_replacements.items():
+              if runtime_text.count(old) != 1:
+                  raise SystemExit(f'Expected generated price fixture once: {old}')
+              runtime_text = runtime_text.replace(old, new)
+          runtime.write_text(runtime_text, encoding='utf-8')
           PY
       - name: Remove one-shot automation
         shell: bash
