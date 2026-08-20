@@ -547,7 +547,7 @@ const billing = {
   STRIPE_CREATOR_ANNUAL_PRICE_ID: 'price_creator_year',
   STRIPE_PRO_MONTHLY_PRICE_ID: 'price_pro_month',
   STRIPE_PRO_ANNUAL_PRICE_ID: 'price_pro_year',
-  STRIPE_SECRET_KEY: 'sk_test_cortex',
+  STRIPE_SECRET_KEY: 'stripe-test-key',
   STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_cortex',
   BILLING_RETURN_URL: 'https://billing.example.test/account',
 };
@@ -782,7 +782,7 @@ describe('Stripe entitlement authority', () => {
 
 const billingEnv = {
   ...env,
-  STRIPE_SECRET_KEY: 'sk_test_cortex',
+  STRIPE_SECRET_KEY: 'stripe-test-key',
   STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_cortex',
   BILLING_RETURN_URL: 'https://billing.example.test/account',
 } as Env;
