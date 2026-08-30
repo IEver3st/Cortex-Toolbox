@@ -14,7 +14,7 @@ Analyse scripts, edit manifests, repair vehicle metadata, map resource relations
 [![Electron](https://img.shields.io/badge/Electron-43-47848F?logo=electron)](https://www.electronjs.org/)
 [![Licence](https://img.shields.io/github/license/IEver3st/Cortex-Toolbox)](./LICENSE)
 
-[Download Cortex](https://github.com/IEver3st/Cortex-Toolbox/releases/latest) · [Report a problem](https://github.com/IEver3st/Cortex-Toolbox/issues/new) · [View changelog](./CHANGELOG.md) · [Security](./SECURITY.md)
+[Official product page](https://frommeans.com/cortex-toolbox) · [Download Cortex](https://github.com/IEver3st/Cortex-Toolbox/releases/latest) · [Report a problem](https://github.com/IEver3st/Cortex-Toolbox/issues/new) · [View changelog](./CHANGELOG.md) · [Security](./SECURITY.md)
 
 **Free tools for people who make things.**
 
