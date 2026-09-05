@@ -10,15 +10,9 @@ Cortex ToolBox is a local-first FiveM resource desktop workbench. Monorepo: `app
 
 ## Validation
 
-Run before PR and after meaningful changes:
+During implementation, run affected package typechecks and focused Vitest coverage. Before a PR, run the integration gates once: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm format:check`, and `pnpm security:scan`. These also have hook/CI coverage; do not repeat full runs after unrelated edits.
 
-- `pnpm typecheck`
-- `pnpm lint`
-- `pnpm test`
-- `pnpm build`
-- `pnpm format:check` and `pnpm security:scan` (also enforced by pre-commit hook and CI)
-
-CI is `.github/workflows/checks.yml` on `ubuntu-latest`. Release validation is `pnpm release:check` and `pnpm release -- <version> <channel>` which dispatches GitHub Actions; do not build or upload artifacts from the maintainer machine.
+CI is `.github/workflows/checks.yml`. For an authorized release, `pnpm release:check` and `pnpm release -- <version> <channel>` validate and dispatch GitHub Actions. Do not build or upload release artifacts from the maintainer machine.
 
 ## Architecture invariants
 
@@ -48,6 +42,6 @@ CI is `.github/workflows/checks.yml` on `ubuntu-latest`. Release validation is `
 
 ## Specialized work
 
-- For product UI use `frontend-design` or `product-ui-orchestrator` with `interface-design` as lead visual authority; inspect the real target in `apps/desktop` before changing.
+- For product UI use `frontend-design`; if `impeccable` is also selected, it owns art direction and frontend-design owns implementation and verification; inspect the real target in `apps/desktop` before changing.
 - For FiveM resource, manifest, vehicle metadata, or NUI work use `fivem-orchestrator` and cross-check `README.md` Workbench and `apps/desktop/PRODUCT.md` before adding framework assumptions.
-- For user-facing prose load `unslop` and keep voice reliable, confident, and elegant. Do not use em dashes.
+- For substantial prose rewriting use `unslop` and keep voice reliable, confident, and elegant. Do not use em dashes.
