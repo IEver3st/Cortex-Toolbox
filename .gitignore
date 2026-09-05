@@ -75,6 +75,7 @@ copilot-instructions.md
 .github/copilot-instructions.md
 agents.md
 AGENTS.md
+!/AGENTS.md
 claude.md
 CLAUDE.md
 cursor-rules.md
