@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@cortex/ai": "workspace:*",
-    "hono": "4.13.1",
+    "hono": "4.13.5",
     "jose": "6.2.8",
     "zod": "4.4.3"
   },
