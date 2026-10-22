@@ -68,6 +68,6 @@
     "@vitejs/plugin-react": "6.0.3",
     "electron": "43.1.0",
     "extract-zip": "2.0.1",
-    "vite": "8.1.4"
+    "vite": "8.1.6"
   }
 }
